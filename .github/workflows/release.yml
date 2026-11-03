@@ -66,21 +66,32 @@ jobs:
         run: |
           mkdir -p dist
           CGO_ENABLED=1 go build -buildmode=c-shared -o "dist/relaywarden.${{ matrix.ext }}" .
+          # c-shared also emits a C header; it is not a release artifact.
+          rm -f dist/relaywarden.h
       # The plugin store installs from a per-platform zip that holds the
       # dynamic library at its root, named <id>.<ext>.
       - name: Package zip (Unix)
         if: runner.os != 'Windows'
         shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          EXT: ${{ matrix.ext }}
         run: |
           version="${GITHUB_REF_NAME#v}"
           cd dist
-          zip -j "relaywarden_${version}_${{ matrix.goos }}_${{ matrix.goarch }}.zip" "relaywarden.${{ matrix.ext }}"
+          zip -j "relaywarden_${version}_${GOOS}_${GOARCH}.zip" "relaywarden.${EXT}"
       - name: Package zip (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
         run: |
-          $version = "${{ github.ref_name }}".TrimStart("v")
-          Compress-Archive -Path "dist/relaywarden.dll" -DestinationPath "dist/relaywarden_${version}_${{ matrix.goos }}_${{ matrix.goarch }}.zip" -Force
+          $version = $env:REF_NAME.TrimStart("v")
+          $name = "relaywarden_{0}_{1}_{2}.zip" -f $version, $env:GOOS, $env:GOARCH
+          Compress-Archive -Path "dist/relaywarden.dll" -DestinationPath "dist/$name" -Force
       - uses: actions/upload-artifact@v4
         with:
           name: relaywarden-${{ matrix.goos }}-${{ matrix.goarch }}
