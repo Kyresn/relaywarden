@@ -83,6 +83,20 @@ const auths = [
   { auth_id: "relay-b", model: "claude-sonnet-5.5", samples: 18, avg_ttft_ms: 1100, p95_ttft_ms: 2600, error_rate: 0.062, degrade_rate: 0.22, signals: 4 },
 ];
 
+// MOCK_EMPTY=1 serves the zero-data state so the UI empty states can be checked.
+const EMPTY = process.env.MOCK_EMPTY === "1";
+const emptyStatus = {
+  ...status,
+  compression: { ...status.compression, saved: 0, saved_pct: 0, shadow_saved: 0 },
+  guard: { ...status.guard, signals: {} },
+  routing: { ...status.routing, auths: 0 },
+};
+const emptyStats = {
+  total: { requests: 0, blocks: 0, bytes_before: 0, bytes_after: 0 },
+  shadow: { requests: 0, blocks: 0, bytes_before: 0, bytes_after: 0 },
+  by_filter: [], by_model: [], by_format: [],
+};
+
 function json(res, code, body) {
   const raw = JSON.stringify(body);
   res.writeHead(code, { "content-type": "application/json", "cache-control": "no-store" });
@@ -92,11 +106,12 @@ function json(res, code, body) {
 createServer((req, res) => {
   const url = new URL(req.url ?? "/", "http://127.0.0.1:8317");
   const p = url.pathname;
-  if (p === "/v0/management/relaywarden/status") return json(res, 200, status);
-  if (p === "/v0/management/relaywarden/compression/stats") return json(res, 200, stats);
-  if (p === "/v0/management/relaywarden/signals") return json(res, 200, { signals });
-  if (p === "/v0/management/relaywarden/signals/summary") return json(res, 200, { counters: status.guard.signals });
-  if (p === "/v0/management/relaywarden/routing") return json(res, 200, { auths });
+  if (p === "/v0/management/relaywarden/status") return json(res, 200, EMPTY ? emptyStatus : status);
+  if (p === "/v0/management/relaywarden/config") return json(res, 200, config);
+  if (p === "/v0/management/relaywarden/compression/stats") return json(res, 200, EMPTY ? emptyStats : stats);
+  if (p === "/v0/management/relaywarden/signals") return json(res, 200, { signals: EMPTY ? [] : signals });
+  if (p === "/v0/management/relaywarden/signals/summary") return json(res, 200, { counters: EMPTY ? {} : status.guard.signals });
+  if (p === "/v0/management/relaywarden/routing") return json(res, 200, { auths: EMPTY ? [] : auths });
   if (p === "/v0/management/relaywarden/compression/preview") {
     let body = "";
     req.on("data", (c) => (body += c));
