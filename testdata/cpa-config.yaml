@@ -1,0 +1,39 @@
+# Local end-to-end fixture. Management key: test-management-key. Client key: test-client-key.
+config-version: 8
+server:
+    host: "127.0.0.1"
+    port: 18317
+management:
+    allow-remote: false
+    secret-key: "$2a$10$bqBNa3T3MEcW861Fd1FRPevlb.1QjynR3OWCFI1N.38MH4vHernxa"
+access:
+    api-keys:
+        - "test-client-key"
+plugins:
+    enabled: true
+    dir: "plugins"
+    configs:
+        cpa-guard:
+            enabled: true
+            priority: 10
+            compression:
+                enabled: true
+                shadow: true
+                min_bytes: 100
+                tail_only: true
+            guard:
+                enabled: true
+            routing:
+                enabled: true
+                strategy: "off"
+            ui:
+                enabled: true
+api-keys:
+    openai-compatibility:
+        - name: "mock"
+          base-url: "http://127.0.0.1:19000/v1"
+          keys:
+            - api-key: "mock-key"
+          models:
+            - name: "gpt-4o"
+              alias: "mock-gpt"

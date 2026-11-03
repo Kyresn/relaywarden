@@ -1,0 +1,103 @@
+# CPA Guard plugin configuration.
+# Copy the `plugins` block into CLIProxyAPI's config.yaml and adjust paths.
+plugins:
+  enabled: true
+  dir: "plugins"          # cpa-guard.dll must be named after the config key
+  configs:
+    cpa-guard:
+      enabled: true
+      priority: 10
+
+      compression:
+        enabled: true
+        mode: balanced        # safe | balanced | aggressive
+        shadow: true          # measure only; send the original body
+        tail_only: true       # protect the prompt-cache prefix
+        tail_items: 3
+        min_bytes: 500
+        max_bytes: 10485760
+        max_chars_per_result: 12000
+        max_lines_per_result: 120
+        dedup_threshold: 3
+        protocols:
+          openai_chat: true
+          openai_responses: true
+          gemini: true
+        filters:
+          git_diff: true
+          git_status: true
+          git_log: true
+          grep: true
+          find: true
+          ls: true
+          tree: true
+          build_output: true
+          test_output: true
+          dedup_log: true
+          smart_truncate: true
+          read_numbered: true
+          json_minify: true
+          strip_ansi: true
+
+      guard:
+        enabled: true
+        observe_only: true      # locked true in v1
+        reinject_source_params: true
+        inject_prompt_cache_key: false
+        check_model: true
+        check_reasoning: true
+        check_cache: true
+        check_tools: true
+        check_params: true
+        check_fingerprint: true
+        check_usage: true
+        check_cache_reason: true
+        check_truncation: true
+        check_empty: true
+        check_ttft: false
+        cache_miss_threshold: 3
+        prompt_token_threshold: 2048
+        signals:
+          model_mismatch: true
+          reasoning_stripped: true
+          source_param_dropped: true
+          cache_miss_streak: true
+          service_tier_downgraded: true
+          system_fingerprint_changed: true
+          cache_miss_reason: true
+          usage_invariant_violation: true
+          tools_changed: true
+          system_prompt_changed: false
+          empty_output: true
+          truncated: true
+          usage_missing: true
+          ttft_anomaly: false
+        alerts:
+          log: true
+          min_severity: medium
+          cooldown_seconds: 300
+          webhook:
+            enabled: false
+            url: ""
+
+      routing:
+        enabled: true
+        strategy: latency_cache   # latency_cache | latency_only | off
+        cache_affinity: true
+        window: 20
+        ttl_seconds: 900
+        min_samples: 3
+        affinity_ttl_seconds: 1800
+        weights:
+          ttft: 0.60
+          error: 0.25
+          degrade: 0.15
+
+      metrics:
+        enabled: true
+        max_signals: 1000
+
+      ui:
+        enabled: true
+        poll_interval_ms: 2000
+        show_advanced: false

@@ -1,0 +1,86 @@
+package management
+
+import (
+	"encoding/json"
+	"testing"
+	"testing/fstest"
+	"time"
+
+	"cpa-guard/internal/config"
+	"cpa-guard/internal/guard"
+	"cpa-guard/internal/metrics"
+	"cpa-guard/internal/routing"
+	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
+)
+
+func deps(t *testing.T) Deps {
+	t.Helper()
+	store, err := config.NewStore([]byte(`
+enabled: true
+compression:
+  enabled: true
+  shadow: false
+  min_bytes: 100
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return Deps{
+		Config: store, Guard: guard.New(store), Routing: routing.New(), Metrics: metrics.New(),
+		Assets: fstest.MapFS{
+			"index.html":    {Data: []byte("<html>ok</html>")},
+			"assets/app.js": {Data: []byte("console.log('ok')")},
+		},
+		Started: time.Now(),
+	}
+}
+
+func TestStatusAndPreview(t *testing.T) {
+	d := deps(t)
+	defer d.Guard.Close()
+	resp := Handle(pluginapi.ManagementRequest{Method: "GET", Path: "/cpa-guard/status"}, d)
+	if resp.StatusCode != 200 || len(resp.Body) == 0 {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	var status map[string]any
+	if err := json.Unmarshal(resp.Body, &status); err != nil {
+		t.Fatal(err)
+	}
+	if status["loaded"] != true {
+		t.Fatalf("loaded = %v", status["loaded"])
+	}
+
+	body, _ := json.Marshal(map[string]string{"text": "src/main.go:1:match\nsrc/main.go:2:match\n", "format": "openai"})
+	resp = Handle(pluginapi.ManagementRequest{Method: "POST", Path: "/cpa-guard/compression/preview", Body: body}, d)
+	if resp.StatusCode != 200 {
+		t.Fatalf("preview = %d: %s", resp.StatusCode, resp.Body)
+	}
+}
+
+func TestResourceServingAndCSP(t *testing.T) {
+	d := deps(t)
+	defer d.Guard.Close()
+	resp := Handle(pluginapi.ManagementRequest{Method: "GET", Path: "/v0/resource/plugins/cpa-guard/ui"}, d)
+	if resp.StatusCode != 200 || string(resp.Body) != "<html>ok</html>" {
+		t.Fatalf("index = %d %s", resp.StatusCode, resp.Body)
+	}
+	if resp.Headers.Get("Content-Security-Policy") == "" {
+		t.Fatal("missing CSP")
+	}
+	resp = Handle(pluginapi.ManagementRequest{Method: "GET", Path: "/v0/resource/plugins/cpa-guard/ui/assets/app.js"}, d)
+	if resp.StatusCode != 200 || resp.Headers.Get("Cache-Control") == "" {
+		t.Fatalf("asset = %d", resp.StatusCode)
+	}
+	if resp.Headers.Get("Content-Type") != "text/javascript; charset=utf-8" {
+		t.Fatalf("content type = %q", resp.Headers.Get("Content-Type"))
+	}
+}
+
+func TestUnknownPath(t *testing.T) {
+	d := deps(t)
+	defer d.Guard.Close()
+	resp := Handle(pluginapi.ManagementRequest{Method: "GET", Path: "/cpa-guard/nope"}, d)
+	if resp.StatusCode != 404 {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+}

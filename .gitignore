@@ -1,0 +1,11 @@
+web/node_modules/
+web/dist/
+web/tsconfig.tsbuildinfo
+plugins/*.dll
+plugins/*.so
+plugins/*.dylib
+plugins/*.h
+testdata/upstream-last.json
+testdata/request.json
+.remember/
+*.log

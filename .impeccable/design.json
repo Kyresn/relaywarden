@@ -1,0 +1,47 @@
+{
+  "name": "Midnight Transit",
+  "version": 1,
+  "mode": "operate",
+  "seed": "a900d29114ca692c",
+  "colors": {
+    "ground": "#0b1722",
+    "ground-2": "#0e1d2b",
+    "panel": "#112436",
+    "panel-2": "#162c40",
+    "ink": "#eef2ee",
+    "muted": "#8fa3b8",
+    "dim": "#63788d",
+    "line": "#294054",
+    "line-soft": "#1c3143",
+    "porcelain": "#f2f4f1",
+    "green": "#4f9d69",
+    "amber": "#d9a441",
+    "red": "#d64545",
+    "cobalt": "#3d6fb4"
+  },
+  "typography": {
+    "ui": "\"Segoe UI Variable Text\", \"Segoe UI\", system-ui, sans-serif",
+    "data": "\"Cascadia Mono\", \"Cascadia Code\", ui-monospace, monospace",
+    "body-size": "13px",
+    "body-line-height": "1.45",
+    "heading-size": "15px",
+    "readout-size": "22px"
+  },
+  "spacing": {
+    "page-x": "24px",
+    "section-y": "18px",
+    "row-y": "8px",
+    "rail": "96px",
+    "topbar": "56px",
+    "tape": "44px"
+  },
+  "radii": {
+    "control": "3px",
+    "pill": "999px"
+  },
+  "signature": {
+    "name": "route strip",
+    "description": "Four parallel feature lines between Client, CPA, and Upstream; line state reflects the master switches."
+  },
+  "languages": ["zh", "en"]
+}
