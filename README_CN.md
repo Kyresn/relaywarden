@@ -75,7 +75,13 @@ DLL 文件名必须与配置键一致：`plugins.configs.relaywarden`。宿主�
 
 ## 安装
 
-把 `relaywarden.dll` 放到 CLIProxyAPI 的 `plugins/` 目录，然后在 `config.yaml` 中加入：
+### 从插件商店安装
+
+RelayWarden 已提交到 CLIProxyAPI 官方插件商店。上架后可在 CPA 管理面板中直接安装：CPA 会下载对应平台的压缩包，用 `checksums.txt` 校验，再写入 `plugins/<goos>/<goarch>/`。
+
+### 手动安装
+
+从[最新发布](https://github.com/Kyresn/relaywarden/releases/latest)下载 `relaywarden.<ext>`，放到 CLIProxyAPI 的 `plugins/` 目录，然后在 `config.yaml` 中加入：
 
 ```yaml
 plugins:

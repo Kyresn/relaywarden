@@ -56,7 +56,7 @@ const signals = [
 ];
 
 const status = {
-  loaded: true, version: "0.1.0", started_at: new Date(now - 3_600_000).toISOString(),
+  loaded: true, version: "0.1.1", started_at: new Date(now - 3_600_000).toISOString(),
   config_revision: 12, enabled: true,
   compression: { enabled: true, mode: "balanced", shadow: true, tail_only: true, saved: 4_812_000, saved_pct: 38.2, shadow_saved: 1_200_000 },
   guard: { enabled: true, observe_only: true, signals: { reasoning_stripped: 3, model_mismatch: 1, cache_miss_streak: 2, source_param_dropped: 1, truncated: 1 } },

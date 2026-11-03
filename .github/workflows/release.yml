@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -35,13 +36,16 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact: relaywarden-linux-amd64.so
+            goos: linux
+            goarch: amd64
             ext: so
           - os: macos-latest
-            artifact: relaywarden-darwin-arm64.dylib
+            goos: darwin
+            goarch: arm64
             ext: dylib
           - os: windows-latest
-            artifact: relaywarden-windows-amd64.dll
+            goos: windows
+            goarch: amd64
             ext: dll
     runs-on: ${{ matrix.os }}
     steps:
@@ -61,15 +65,33 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          CGO_ENABLED=1 go build -buildmode=c-shared -o "dist/${{ matrix.artifact }}" .
+          CGO_ENABLED=1 go build -buildmode=c-shared -o "dist/relaywarden.${{ matrix.ext }}" .
+      # The plugin store installs from a per-platform zip that holds the
+      # dynamic library at its root, named <id>.<ext>.
+      - name: Package zip (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          cd dist
+          zip -j "relaywarden_${version}_${{ matrix.goos }}_${{ matrix.goarch }}.zip" "relaywarden.${{ matrix.ext }}"
+      - name: Package zip (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          Compress-Archive -Path "dist/relaywarden.dll" -DestinationPath "dist/relaywarden_${version}_${{ matrix.goos }}_${{ matrix.goarch }}.zip" -Force
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: dist/${{ matrix.artifact }}
+          name: relaywarden-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/
           if-no-files-found: error
 
   publish:
     needs: build
+    # workflow_dispatch is for rebuilding artifacts against an existing tag.
+    # A dispatch on a branch must not create a release.
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -77,11 +99,22 @@ jobs:
           pattern: relaywarden-*
           path: dist
           merge-multiple: true
-      - name: Create release
+      - name: Write checksums
+        run: |
+          cd dist
+          sha256sum * > checksums.txt
+          cat checksums.txt
+      - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/* \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "$GITHUB_REF_NAME" \
-            --generate-notes
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes
+          fi

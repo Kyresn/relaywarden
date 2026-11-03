@@ -68,12 +68,18 @@ No stream-chunk interceptor is registered. Streaming requests rely on the final 
 
 ## Install
 
-Build or download `relaywarden.<ext>` and place it in CLIProxyAPI's plugin directory.
+### From the plugin store
+
+RelayWarden is submitted to the official CLIProxyAPI plugin store. Once listed, install it from the CPA management panel: CPA downloads the archive for your platform, verifies it against `checksums.txt`, and writes it to `plugins/<goos>/<goarch>/`.
+
+### Manual
+
+Download `relaywarden.<ext>` from the [latest release](https://github.com/Kyresn/relaywarden/releases/latest) and place it in CLIProxyAPI's plugin directory.
 
 ```yaml
 plugins:
   enabled: true
-  dir: "plugins"          # relaywarden.dll must match the config key
+  dir: "plugins"          # the file name must match the config key
   configs:
     relaywarden:
       enabled: true

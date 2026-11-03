@@ -106,4 +106,4 @@ func (q *webhookQueue) send(s Signal) {
 }
 
 // Version is the plugin version reported in metadata and webhooks.
-const Version = "0.1.0"
+const Version = "0.1.1"

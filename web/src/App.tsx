@@ -186,6 +186,7 @@ export default function App() {
       <div className="body">
         <LineRail
           config={config}
+          version={status.version}
           active={tab}
           onSelect={setTab}
         />
@@ -281,10 +282,12 @@ function KeyGate({ value, onChange, onSubmit }: { value: string; onChange: (v: s
 
 function LineRail({
   config,
+  version,
   active,
   onSelect,
 }: {
   config: DashboardData["config"];
+  version: string;
   active: Tab;
   onSelect: (tab: Tab) => void;
 }) {
@@ -310,7 +313,7 @@ function LineRail({
           </button>
         </div>
       ))}
-      <div className="rail-foot mono">v0.1.0</div>
+      <div className="rail-foot mono">{version ? `v${version}` : ""}</div>
     </aside>
   );
 }
