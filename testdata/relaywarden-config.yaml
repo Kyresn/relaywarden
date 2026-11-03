@@ -5,7 +5,7 @@ server:
     port: 18317
 management:
     allow-remote: false
-    secret-key: "$2a$10$bqBNa3T3MEcW861Fd1FRPevlb.1QjynR3OWCFI1N.38MH4vHernxa"
+    secret-key: "test-management-key"
 access:
     api-keys:
         - "test-client-key"
@@ -13,7 +13,7 @@ plugins:
     enabled: true
     dir: "plugins"
     configs:
-        cpa-guard:
+        relaywarden:
             enabled: true
             priority: 10
             compression:
@@ -25,7 +25,7 @@ plugins:
                 enabled: true
             routing:
                 enabled: true
-                strategy: "off"
+                strategy: "latency_cache"
             ui:
                 enabled: true
 api-keys:

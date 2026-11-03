@@ -128,7 +128,7 @@ export function GuardPage({
             <input
               type="url"
               value={webhook}
-              placeholder="https://example.com/cpa-guard"
+              placeholder="https://example.com/relaywarden"
               onChange={(e) => {
                 setWebhook(e.target.value);
                 setWebhookSaved(false);

@@ -1,4 +1,4 @@
-# CPA Guard design system
+# RelayWarden design system
 
 Direction: Midnight Transit. A working gateway console read as a transit diagram:
 feature lines, auth stations, service states. The world contributes type,

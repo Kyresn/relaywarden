@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 
 export type Lang = "zh" | "en";
 
-const STORAGE_KEY = "cpa-guard-lang";
+const STORAGE_KEY = "relaywarden-lang";
 
 type Dict = Record<string, string>;
 
@@ -28,7 +28,7 @@ const zh: Dict = {
   "top.applying": "应用中…",
   "top.dismiss": "关闭",
   "boot.connecting": "连接 CPA management API…",
-  "key.title": "CPA Guard",
+  "key.title": "RelayWarden",
   "key.desc": "输入 CPA management key。它只保存在当前标签页的 sessionStorage 中，关闭标签页即清除。",
   "key.label": "Management key",
   "key.connect": "连接",
@@ -199,7 +199,7 @@ const zh: Dict = {
   "settings.max_signals": "信号保留上限",
   "settings.export": "导出",
   "settings.download": "下载配置 JSON",
-  "settings.export.help": "只包含 plugins.configs.cpa-guard 子树。",
+  "settings.export.help": "只包含 plugins.configs.relaywarden 子树。",
   "settings.boundaries": "边界",
   "settings.boundaries.hint": "这个版本不做什么。",
   "settings.boundary.1": "不自动切换 auth、不重试、不修改响应；降智只记录。",
@@ -285,7 +285,7 @@ const en: Dict = {
   "top.applying": "applying…",
   "top.dismiss": "dismiss",
   "boot.connecting": "Connecting to the CPA management API…",
-  "key.title": "CPA Guard",
+  "key.title": "RelayWarden",
   "key.desc": "Enter the CPA management key. It lives in this tab's sessionStorage and clears when the tab closes.",
   "key.label": "Management key",
   "key.connect": "Connect",
@@ -456,7 +456,7 @@ const en: Dict = {
   "settings.max_signals": "Signal retention",
   "settings.export": "Export",
   "settings.download": "Download config JSON",
-  "settings.export.help": "Only the plugins.configs.cpa-guard subtree.",
+  "settings.export.help": "Only the plugins.configs.relaywarden subtree.",
   "settings.boundaries": "Boundaries",
   "settings.boundaries.hint": "What this version does not do.",
   "settings.boundary.1": "No automatic auth switching, retries, or response edits; degradation is only recorded.",

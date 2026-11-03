@@ -75,7 +75,7 @@ row, not a modal.
 ## Language
 
 Chinese and English are both first-class. The toggle lives in the top bar and the
-key gate. Preference is stored in `localStorage` under `cpa-guard-lang`; it is a
+key gate. Preference is stored in `localStorage` under `relaywarden-lang`; it is a
 UI preference, not a secret. Technical identifiers (signal codes, auth IDs,
 model IDs, filter names) stay verbatim in both languages.
 

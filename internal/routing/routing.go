@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"cpa-guard/internal/config"
+	"github.com/Kyresn/relaywarden/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 )
 

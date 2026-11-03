@@ -1,223 +1,205 @@
-# CPA Guard
+# RelayWarden
 
-CLIProxyAPI v8 插件：工具输出压缩、中转降智观察、缓存亲和 + 延迟路由。
+[中文](README_CN.md) | English
 
-- 插件形态：Go C ABI 动态库（Windows `cpa-guard.dll`），由 CLIProxyAPI 加载。
-- 管理 UI：React + Vite，构建产物通过 `go:embed` 打进 DLL，页面在 `/v0/resource/plugins/cpa-guard/ui`。
-- 所有功能都有独立开关；开关写入 CPA v8 配置 API，持久化到 `config.yaml`。
-- v1 对降智只记录告警，不自动切换 auth、不重试、不修改响应。
+A CLIProxyAPI v8 plugin for three jobs on the relay path:
 
-## 功能
+1. **Token compression** — rewrite tool output before it leaves the gateway.
+2. **Relay degradation signals** — observe model substitution, stripped reasoning, cache loss, and parameter drops.
+3. **Latency-aware routing** — keep a session on the same auth for prompt-cache affinity, and prefer the fastest healthy auth when samples exist.
 
-### 1. Token 压缩
+RelayWarden is a plugin, not another gateway. It loads into CLIProxyAPI as a C ABI dynamic library, and the management UI is embedded in the same DLL.
 
-- 在 `request.intercept_before` 改写工具输出，覆盖：
-  - OpenAI Responses / Codex：`function_call_output`、`custom_tool_call_output`、`local_shell_call_output`
-  - OpenAI Chat：`role: "tool"` 消息
-  - Gemini：`functionResponse.response`
-- 14 个过滤器：git diff/status/log、grep、find、ls、tree、build/test 输出、日志去重、智能截断、编号文件、JSON 最小化、ANSI 清理。
-- 默认 `tail_only`：只压缩最后一轮 user 消息之后的工具输出，保护 prompt cache 前缀。
-- 默认 `shadow: true`：只统计节省字节，发送原文。确认收益后再关闭 shadow。
-- 任何解析/压缩失败都返回原文；压缩结果必须非空且更小。
+![RelayWarden management UI](docs/ui-desktop.png)
 
-### 2. 防降智观察
+## Status
 
-- `request.intercept_before` 保存请求画像（模型、reasoning、max tokens、cache key、工具、system 哈希）。
-- `request.intercept_after` 只做源级恢复：把 before-auth 中丢失的 reasoning、max_tokens、cache key、service_tier 等字段补回源 body；provider payload 的翻译在 executor 内部，插件不承诺改写最终上游字段。
-- `response.intercept_after` + `usage.handle` 产生信号：
-  - `model_mismatch`
-  - `reasoning_stripped`
-  - `source_param_dropped`
-  - `cache_miss_streak`
-  - `cache_miss_reason`
-  - `service_tier_downgraded`
-  - `system_fingerprint_changed`
-  - `usage_invariant_violation`
-  - `tools_changed`
-  - `system_prompt_changed`
-  - `empty_output`
-  - `truncated`
-  - `usage_missing`
-  - `ttft_anomaly`
-- 信号写入内存环形缓冲、可选 CPA 日志、可选 webhook。每个信号都有独立开关。
+v0.1, Windows-tested end to end. Linux and macOS c-shared builds are covered by CI but have not been tested against a live CLIProxyAPI instance in this repository. Degradation handling is **observe-only**: signals are recorded, routing is not switched, and responses are not edited.
 
-### 3. 提速
+## Features
 
-- `scheduler.pick` 使用每个 `auth + model` 的滑动窗口（默认 20 样本、15 分钟 TTL、最少 3 样本）。
-- 评分：`0.60 * norm(TTFT) + 0.25 * error_rate + 0.15 * degrade_rate`。
-- 会话亲和：同一 `execution_session_id` 优先留在同一 auth；如果该 auth 明显更慢则重新选择。
-- 样本不足时返回 `Handled: false`，交回 CPA 内置调度器。
-- 不注册流式逐 chunk 拦截器；流式请求只依赖 `usage.handle` 的最终 usage。
+### Compression
 
-## 构建
+- Source formats: OpenAI Chat Completions, OpenAI Responses / Codex, Gemini.
+- Tool-output shapes: `role: "tool"`, `function_call_output`, `custom_tool_call_output`, `local_shell_call_output`, Gemini `functionResponse.response`.
+- 14 filters: git diff/status/log, grep, find, ls, tree, build output, test output, log dedup, smart truncate, numbered file dumps, JSON minify, ANSI cleanup.
+- `tail_only` by default: only tool output after the last user turn is touched, so the prompt-cache prefix stays byte-stable.
+- `shadow: true` by default: measure savings without changing what is sent.
+- Every path fails open. A replacement must be non-empty, strictly smaller, and must not lose error lines.
 
-前置：Go 1.26+、Node 20+、MinGW gcc（Windows 上 `-buildmode=c-shared` 需要 CGO）。
+### Guard signals
 
-```bash
-cd CpaPlugin
-npm --prefix web ci
-npm --prefix web run build
-CGO_ENABLED=1 go build -buildmode=c-shared -o plugins/cpa-guard.dll .
-```
+- `model_mismatch`
+- `reasoning_stripped`
+- `source_param_dropped`
+- `cache_miss_streak`
+- `cache_miss_reason`
+- `service_tier_downgraded`
+- `system_fingerprint_changed`
+- `usage_invariant_violation`
+- `tools_changed`
+- `system_prompt_changed`
+- `empty_output`
+- `truncated`
+- `usage_missing`
+- `ttft_anomaly`
 
-或：
+Each signal has its own switch. Signals can be written to the CPA log and/or sent to an HTTP webhook. Webhook delivery is asynchronous, bounded, and never blocks a request.
 
-```bash
-make build
-```
+### Routing
 
-产物：
+- Per `auth + model` rolling windows: 20 samples, 15-minute TTL, 3 samples before scoring.
+- Score: `0.60 * norm(TTFT) + 0.25 * error_rate + 0.15 * degrade_rate`.
+- Session affinity keeps a session on its previous auth unless it is clearly slower.
+- If no candidate has enough samples, RelayWarden returns `Handled: false` and CPA's built-in scheduler keeps control.
 
-- `plugins/cpa-guard.dll`
-- `plugins/cpa-guard.h`（可删除）
+## How it plugs into CLIProxyAPI
 
-DLL 文件名必须与配置键一致：`plugins.configs.cpa-guard`。宿主会扫描 `plugins/` 以及 `plugins/<goos>/<goarch>/`。
+| Hook | Use |
+|---|---|
+| `request.intercept_before` | Save the request profile; compress tool output; optionally derive a prompt-cache key. |
+| `request.intercept_after` | Restore source-level fields lost before translation. The body is still source JSON; provider translation happens later in the executor. |
+| `response.intercept_after` | Inspect non-stream responses for truncation, empty output, fingerprints, and cache diagnostics. |
+| `usage.handle` | Model identity, reasoning/cache/usage invariants, TTFT samples, routing windows. |
+| `scheduler.pick` | Cache-affinity and latency-aware auth selection. |
+| `management_api` | Status, compression stats, preview, signals, usage diagnostics, routing windows, and the embedded UI. |
 
-## 安装
+No stream-chunk interceptor is registered. Streaming requests rely on the final `usage.handle` record.
 
-把 `cpa-guard.dll` 放到 CLIProxyAPI 的 `plugins/` 目录，然后在 `config.yaml` 中加入：
+## Install
+
+Build or download `relaywarden.<ext>` and place it in CLIProxyAPI's plugin directory.
 
 ```yaml
 plugins:
   enabled: true
-  dir: "plugins"
+  dir: "plugins"          # relaywarden.dll must match the config key
   configs:
-    cpa-guard:
+    relaywarden:
       enabled: true
       priority: 10
       compression:
         enabled: true
-        shadow: true
+        shadow: true       # measure first
       guard:
         enabled: true
       routing:
         enabled: true
 ```
 
-完整开关见 [config.example.yaml](config.example.yaml)。
+The full switch surface is in [config.example.yaml](config.example.yaml). Restart CPA after adding the plugin.
 
-重启 CPA。管理 UI：
+## Management UI
+
+Open:
 
 ```text
-http://127.0.0.1:8317/v0/resource/plugins/cpa-guard/ui
+http://127.0.0.1:8317/v0/resource/plugins/relaywarden/ui
 ```
 
-首次打开输入 CPA management key。key 只保存在当前标签页的 `sessionStorage`，关闭标签页即清除。页面本身是静态资源，不含运行数据；所有数据接口都需要 Bearer key。
+No trailing slash. Enter the CPA management key on first load. The key is kept in `sessionStorage` only; the page itself is static and contains no runtime data. All API calls use `Authorization: Bearer <management-key>`.
 
-管理 UI 支持中英文切换，右上角 `中 / EN`。语言偏好存在 `localStorage` 的 `cpa-guard-lang`，不是密钥。
+The UI supports Chinese and English (top-right `中 / EN`), reads effective config from the plugin, and writes switches through CPA v8:
 
-## 管理 API
+```text
+PATCH /v8/management/config/plugins/configs/relaywarden
+```
 
-插件管理路由（需要 CPA management key）：
+CPA persists the change to `config.yaml` and calls `plugin.reconfigure`; the UI polls `config_revision` until the new snapshot is active.
 
-| 方法 | 路径 | 说明 |
+## Management API
+
+All plugin routes require the CPA management key.
+
+| Method | Path | Purpose |
 |---|---|---|
-| GET | `/v0/management/cpa-guard/status` | 版本、配置 revision、聚合计数 |
-| GET | `/v0/management/cpa-guard/config` | 当前配置 |
-| GET | `/v0/management/cpa-guard/compression/stats` | 按过滤器/模型/协议的节省统计 |
-| POST | `/v0/management/cpa-guard/compression/preview` | `{"text":"...","format":"openai-response"}` |
-| GET | `/v0/management/cpa-guard/signals?limit=100` | 最近告警 |
-| GET | `/v0/management/cpa-guard/signals/summary` | 按 code 的计数 |
-| GET | `/v0/management/cpa-guard/usage` | 最近 usage 记录（诊断用） |
-| GET | `/v0/management/cpa-guard/routing` | auth/model 延迟窗口 |
+| GET | `/v0/management/relaywarden/status` | Version, config revision, counters, effective switches |
+| GET | `/v0/management/relaywarden/config` | Effective config with defaults |
+| GET | `/v0/management/relaywarden/compression/stats` | Counters by filter, model, format |
+| POST | `/v0/management/relaywarden/compression/preview` | `{"text":"...","format":"openai-response"}` |
+| GET | `/v0/management/relaywarden/signals?limit=100` | Recent signals |
+| GET | `/v0/management/relaywarden/signals/summary` | Counters by signal code |
+| GET | `/v0/management/relaywarden/usage` | Recent usage records for diagnostics |
+| GET | `/v0/management/relaywarden/routing` | Per-auth/model latency windows |
 
-开关写入 CPA v8 配置 API：
+## Build
 
-```bash
-curl -X PATCH http://127.0.0.1:8317/v8/management/config/plugins/configs/cpa-guard \
-  -H "Authorization: Bearer $CPA_MANAGEMENT_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"compression":{"enabled":false}}'
-```
-
-CPA 会写回 `config.yaml` 并触发 `plugin.reconfigure`。
-
-## 配置要点
-
-```yaml
-compression:
-  mode: balanced        # safe | balanced | aggressive
-  shadow: true          # 只测量，不改变发送内容
-  tail_only: true       # 保护 prompt cache 前缀
-  min_bytes: 500
-  max_chars_per_result: 12000
-  max_lines_per_result: 120
-  dedup_threshold: 3
-  protocols: { openai_chat: true, openai_responses: true, gemini: true }
-  filters: { git_diff: true, grep: true, ... }
-
-guard:
-  enabled: true
-  observe_only: true    # v1 锁定 true
-  reinject_source_params: true
-  inject_prompt_cache_key: false
-  cache_miss_threshold: 3
-  prompt_token_threshold: 2048
-  signals: { model_mismatch: true, reasoning_stripped: true, ... }
-  alerts:
-    log: true
-    min_severity: medium
-    cooldown_seconds: 300
-    webhook: { enabled: false, url: "" }
-
-routing:
-  enabled: true
-  strategy: latency_cache   # latency_cache | latency_only | off
-  cache_affinity: true
-  window: 20
-  ttl_seconds: 900
-  min_samples: 3
-  affinity_ttl_seconds: 1800
-  weights: { ttft: 0.60, error: 0.25, degrade: 0.15 }
-
-metrics:
-  enabled: true
-  max_signals: 1000
-
-ui:
-  enabled: true
-  poll_interval_ms: 2000
-  show_advanced: false
-```
-
-## 开发
+Requirements: Go 1.26+, Node 20+, and a C toolchain for cgo (`mingw-w64` on Windows, gcc/clang on Linux/macOS).
 
 ```bash
-cd web
-npm install
-npm run dev
+npm --prefix web ci
+npm --prefix web run build
+CGO_ENABLED=1 go build -buildmode=c-shared -o plugins/relaywarden.dll .
 ```
 
-Vite dev server 默认把 `/v0/management` 和 `/v8/management` 代理到 `http://127.0.0.1:8317`。没有 CPA 时可用 mock：
+On Linux/macOS:
 
 ```bash
-node web/dev/mock-server.mjs
+CGO_ENABLED=1 go build -buildmode=c-shared -o plugins/relaywarden.so .
+# macOS: relaywarden.dylib
 ```
 
-然后打开 `http://127.0.0.1:5173/v0/resource/plugins/cpa-guard/ui`，输入任意非空 key。
+`web/dist` must exist before the Go build because the UI is embedded with `go:embed`.
 
-测试：
+## Test
 
 ```bash
 go test ./...
 go test -race ./...
+go vet ./...
 npm --prefix web run build
 ```
 
-## 已知限制
+Compression benchmarks:
 
-- 不覆盖 Claude/Anthropic 客户端协议。
-- 不做 Caveman 提示词瘦身；只保留后续设计空间。
-- 不做流式逐 chunk 完整性检查；流式只依赖最终 usage。
-- 不自动降级切换、不主动重试、不并行竞速。
-- 看不到中转在离开 CPA 之后对请求/响应的二次改写；只能检测可观测信号。
-- 管理 UI 面向本地单人，不做多用户权限、审计或远程共享部署。
-- `guard.observe_only` 在 v1 固定为 true。
+```bash
+go test ./internal/compress -run '^$' -bench . -benchtime=2s
+```
 
-## 安全
+On a Ryzen 7 9800X3D, filter-only measurements are ~2.4 ms per 100 KB grep output and ~0.06 ms per 100 KB git diff. These exclude C ABI body encoding and host JSON costs.
 
-- 管理 key 只存 `sessionStorage`，不写磁盘、不写日志。
-- 资源页面设置 CSP：`default-src 'self'; connect-src 'self'; frame-ancestors 'none'`。
-- 不引入外部字体、分析脚本或 CDN。
-- webhook URL 必须是绝对 `http(s)`；发送异步、有界队列、失败不影响请求。
-- 插件所有可选路径 fail-open；只有注册/配置解析失败会阻止加载。
+## Local end-to-end
+
+`testdata/` contains a local CPA config, a mock OpenAI-compatible upstream, and sample requests. They use dummy keys only.
+
+```bash
+node testdata/mock-upstream.mjs
+cpa-server -config testdata/relaywarden-config.yaml
+curl -H "Authorization: Bearer test-client-key" \
+  -H "Content-Type: application/json" \
+  --data-binary @testdata/request.json \
+  http://127.0.0.1:18317/v1/chat/completions
+```
+
+## Known limits
+
+- Claude/Anthropic client protocols are not covered.
+- No Caveman or LLMLingua prompt compression; tool-output compression is deterministic and measurable.
+- No per-chunk stream integrity checks.
+- No automatic fallback, retry, or hedging.
+- Cannot see what a relay changes after the request leaves CPA; only observable signals are recorded.
+- Routing is observe + select; it never edits a response.
+- The management UI targets a local single operator; it does not implement multi-user permissions, audit logs, or remote shared deployment.
+
+## Security
+
+- Management key: `sessionStorage` only, never written to disk or logs.
+- UI preferences: `localStorage` for language and last config change; no secrets.
+- CSP on the embedded page: `default-src 'self'; connect-src 'self'; frame-ancestors 'none'`.
+- No external fonts, analytics, or CDN assets.
+- Webhook URLs must be absolute `http(s)`; delivery is asynchronous and best-effort.
+- Plugin optional paths fail open; only registration/config parse errors block loading.
+
+## Documentation
+
+- [Compression research](docs/COMPRESSION_RESEARCH.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Management UI](docs/UI.md)
+- [Product context](PRODUCT.md)
+- [Design system](DESIGN.md)
+- [Domain glossary](CONTEXT.md)
+- [ADRs](docs/adr/)
+
+## License
+
+MIT. See [LICENSE](LICENSE).

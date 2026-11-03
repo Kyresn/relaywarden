@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-Go C ABI dynamic-library plugin for CLIProxyAPI v8, with a React + TypeScript + Vite management UI embedded through `go:embed` and served from `/v0/resource/plugins/cpa-guard/`.
+Go C ABI dynamic-library plugin for CLIProxyAPI v8, with a React + TypeScript + Vite management UI embedded through `go:embed` and served from `/v0/resource/plugins/relaywarden/`.
 
 ## Users
 
@@ -16,15 +16,15 @@ A solo developer running CLIProxyAPI on a local Windows machine. They use Codex,
 
 ## Product Purpose
 
-CPA Guard sits inside CLIProxyAPI's request path and makes three things visible and controllable: how many tokens tool-output compression saves, whether a relay or protocol conversion is degrading the model response, and which upstream account is fastest for the current session. Success means the operator can answer "is this request being degraded, how much did we save, and which account should serve the next turn" in seconds, then flip the relevant feature on or off.
+RelayWarden sits inside CLIProxyAPI's request path and makes three things visible and controllable: how many tokens tool-output compression saves, whether a relay or protocol conversion is degrading the model response, and which upstream account is fastest for the current session. Success means the operator can answer "is this request being degraded, how much did we save, and which account should serve the next turn" in seconds, then flip the relevant feature on or off.
 
 ## Positioning
 
-Not another gateway. CPA Guard is a plugin-level signal desk for an existing gateway: compression, quality-fidelity observation, and latency-aware account selection share one configuration surface and one event stream. Every feature is independently switchable, and the UI never hides whether a protection is active, shadowing, or off.
+Not another gateway. RelayWarden is a plugin-level signal desk for an existing gateway: compression, quality-fidelity observation, and latency-aware account selection share one configuration surface and one event stream. Every feature is independently switchable, and the UI never hides whether a protection is active, shadowing, or off.
 
 ## Operating Context
 
-- CLIProxyAPI v8.0.51 on Windows, loaded as `plugins/cpa-guard.dll`.
+- CLIProxyAPI v8.0.51 on Windows, loaded as `plugins/relaywarden.dll`.
 - Clients: Codex / OpenAI Responses, Gemini CLI / Gemini API, and generic OpenAI-compatible clients.
 - Upstreams: native provider accounts and third-party relays.
 - The management UI runs in the same browser origin as CPA, behind the CPA management key.
@@ -43,11 +43,11 @@ Not another gateway. CPA Guard is a plugin-level signal desk for an existing gat
 
 ## Brand Commitments
 
-Working name: CPA Guard. Voice: plain, precise, operational. Controls name their effect; errors name the problem and the recovery. No hype, no mascot, no gamification.
+Working name: RelayWarden. Voice: plain, precise, operational. Controls name their effect; errors name the problem and the recovery. No hype, no mascot, no gamification.
 
 ## Evidence on Hand
 
-No production traffic corpus, benchmarks, or customer evidence exists yet. The compression research document and benchmark fixtures are the first evidence to produce; savings numbers from dsh and OmniRoute are upstream claims, not CPA Guard results. Do not present them as measured CPA Guard performance.
+No production traffic corpus, benchmarks, or customer evidence exists yet. The compression research document and benchmark fixtures are the first evidence to produce; savings numbers from dsh and OmniRoute are upstream claims, not RelayWarden results. Do not present them as measured RelayWarden performance.
 
 ## Product Principles
 

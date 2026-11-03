@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"cpa-guard/internal/config"
+	"github.com/Kyresn/relaywarden/internal/config"
 )
 
 func testCfg() config.CompressionConfig {
@@ -40,7 +40,7 @@ func TestGitDiffCompressesAndKeepsChangedFiles(t *testing.T) {
 	if !strings.Contains(out, "error: something failed") {
 		t.Fatalf("error line lost")
 	}
-	if !strings.Contains(out, "[cpa-guard:") {
+	if !strings.Contains(out, "[relaywarden:") {
 		t.Fatalf("marker missing")
 	}
 }

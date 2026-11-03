@@ -23,7 +23,7 @@ export function SettingsPage({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "cpa-guard-config.json";
+    a.download = "relaywarden-config.json";
     a.click();
     URL.revokeObjectURL(url);
   };

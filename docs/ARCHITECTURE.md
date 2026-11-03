@@ -2,7 +2,7 @@
 
 ## Runtime shape
 
-CPA Guard is a Go `-buildmode=c-shared` plugin loaded by CLIProxyAPI v8. The
+RelayWarden is a Go `-buildmode=c-shared` plugin loaded by CLIProxyAPI v8. The
 host resolves `cliproxy_plugin_init`, then exchanges JSON envelopes over a single
 `cliproxyPluginCall` entry point. Registration returns the lower of the host's
 advertised schema and `pluginabi.SchemaVersion`, with 7 as the fallback, so the
@@ -69,7 +69,7 @@ handler is thread-safe.
 
 ## Configuration
 
-The host serializes `plugins.configs.cpa-guard` as YAML, base64-encodes it into
+The host serializes `plugins.configs.relaywarden` as YAML, base64-encodes it into
 the `config_yaml` field, and sends it on `plugin.register` and
 `plugin.reconfigure`. The plugin parses it into `config.Config`, applies
 defaults for omitted fields, clamps ranges, validates enums and webhook URLs, and
@@ -78,16 +78,16 @@ swaps the snapshot.
 The management UI writes switches through CPA v8:
 
 ```text
-PATCH /v8/management/config/plugins/configs/cpa-guard
+PATCH /v8/management/config/plugins/configs/relaywarden
 ```
 
 CPA persists `config.yaml` and triggers `plugin.reconfigure`. The UI polls
-`/v0/management/cpa-guard/status` until `config_revision` changes.
+`/v0/management/relaywarden/status` until `config_revision` changes.
 
 ## Management UI
 
 - Static React/Vite build embedded with `go:embed web/dist`.
-- Served as a CPA resource route at `/v0/resource/plugins/cpa-guard/ui/`.
+- Served as a CPA resource route at `/v0/resource/plugins/relaywarden/ui/`.
 - The resource page contains no data. The browser asks for the management key
   and keeps it in `sessionStorage`; every API call sends it as a Bearer token.
 - CSP: `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'

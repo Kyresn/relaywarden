@@ -6,6 +6,9 @@ plugins/*.so
 plugins/*.dylib
 plugins/*.h
 testdata/upstream-last.json
-testdata/request.json
 .remember/
 *.log
+
+testdata/static/
+.impeccable/hook.cache.json
+.impeccable/questions/

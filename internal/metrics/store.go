@@ -5,7 +5,7 @@ import (
 	"sort"
 	"sync"
 
-	"cpa-guard/internal/protocol"
+	"github.com/Kyresn/relaywarden/internal/protocol"
 )
 
 type Counter struct {

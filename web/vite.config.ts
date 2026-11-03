@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
-  base: "/v0/resource/plugins/cpa-guard/ui/",
+  base: "/v0/resource/plugins/relaywarden/ui/",
   plugins: [react()],
   build: {
     outDir: "dist",

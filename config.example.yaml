@@ -1,10 +1,10 @@
-# CPA Guard plugin configuration.
+# RelayWarden plugin configuration.
 # Copy the `plugins` block into CLIProxyAPI's config.yaml and adjust paths.
 plugins:
   enabled: true
-  dir: "plugins"          # cpa-guard.dll must be named after the config key
+  dir: "plugins"          # relaywarden.dll must be named after the config key
   configs:
-    cpa-guard:
+    relaywarden:
       enabled: true
       priority: 10
 

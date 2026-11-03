@@ -89,19 +89,19 @@ func (q *webhookQueue) send(s Signal) {
 	}
 	req, err := http.NewRequest(http.MethodPost, cfg.Guard.Alerts.Webhook.URL, bytes.NewReader(payload))
 	if err != nil {
-		log.Printf("cpa-guard webhook: build request: %v", err)
+		log.Printf("relaywarden webhook: build request: %v", err)
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "cpa-guard/"+Version)
+	req.Header.Set("User-Agent", "relaywarden/"+Version)
 	resp, err := q.http.Do(req)
 	if err != nil {
-		log.Printf("cpa-guard webhook: post: %v", err)
+		log.Printf("relaywarden webhook: post: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		log.Printf("cpa-guard webhook: status %d", resp.StatusCode)
+		log.Printf("relaywarden webhook: status %d", resp.StatusCode)
 	}
 }
 

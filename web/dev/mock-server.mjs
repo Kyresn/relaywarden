@@ -50,7 +50,7 @@ const now = Date.now();
 const signals = [
   { time: new Date(now - 40_000).toISOString(), severity: "high", code: "reasoning_stripped", request_id: "8f3a12d4", model: "gpt-5.5", requested_model: "gpt-5.5", auth_id: "codex-main", provider: "codex", detail: { format: "responses", requested_effort: "high", reasoning_tokens: 0 } },
   { time: new Date(now - 90_000).toISOString(), severity: "critical", code: "model_mismatch", request_id: "b21c90aa", model: "claude-sonnet-5.5", requested_model: "claude-sonnet-5.5", response_model: "claude-haiku-4.5", auth_id: "relay-b", provider: "openai", detail: { expected: "claude-sonnet-5.5", got: "claude-haiku-4.5" } },
-  { time: new Date(now - 160_000).toISOString(), severity: "medium", code: "cache_miss_streak", request_id: "11aa77bc", model: "gemini-3-pro", auth_id: "gemini-a", provider: "gemini", detail: { consecutive_misses: 3, cache_key: "cpa-guard-4f2a" } },
+  { time: new Date(now - 160_000).toISOString(), severity: "medium", code: "cache_miss_streak", request_id: "11aa77bc", model: "gemini-3-pro", auth_id: "gemini-a", provider: "gemini", detail: { consecutive_misses: 3, cache_key: "relaywarden-4f2a" } },
   { time: new Date(now - 240_000).toISOString(), severity: "high", code: "source_param_dropped", request_id: "99dd01ff", model: "gpt-5.5", auth_id: "codex-main", provider: "codex", detail: { fields: ["reasoning_effort"], format: "openai" } },
   { time: new Date(now - 320_000).toISOString(), severity: "low", code: "truncated", request_id: "5c7b22e1", model: "gemini-3-pro", auth_id: "gemini-a", provider: "gemini", detail: { reason: "MAX_TOKENS" } },
 ];
@@ -92,23 +92,23 @@ function json(res, code, body) {
 createServer((req, res) => {
   const url = new URL(req.url ?? "/", "http://127.0.0.1:8317");
   const p = url.pathname;
-  if (p === "/v0/management/cpa-guard/status") return json(res, 200, status);
-  if (p === "/v0/management/cpa-guard/compression/stats") return json(res, 200, stats);
-  if (p === "/v0/management/cpa-guard/signals") return json(res, 200, { signals });
-  if (p === "/v0/management/cpa-guard/signals/summary") return json(res, 200, { counters: status.guard.signals });
-  if (p === "/v0/management/cpa-guard/routing") return json(res, 200, { auths });
-  if (p === "/v0/management/cpa-guard/compression/preview") {
+  if (p === "/v0/management/relaywarden/status") return json(res, 200, status);
+  if (p === "/v0/management/relaywarden/compression/stats") return json(res, 200, stats);
+  if (p === "/v0/management/relaywarden/signals") return json(res, 200, { signals });
+  if (p === "/v0/management/relaywarden/signals/summary") return json(res, 200, { counters: status.guard.signals });
+  if (p === "/v0/management/relaywarden/routing") return json(res, 200, { auths });
+  if (p === "/v0/management/relaywarden/compression/preview") {
     let body = "";
     req.on("data", (c) => (body += c));
     req.on("end", () => {
       const parsed = JSON.parse(body || "{}");
       const text = String(parsed.text ?? "");
-      const out = text.length > 120 ? text.slice(0, 80) + "\n... [middle omitted] ...\n" + text.slice(-40) + "\n[cpa-guard: compressed; filter=grep; full output omitted]" : text;
+      const out = text.length > 120 ? text.slice(0, 80) + "\n... [middle omitted] ...\n" + text.slice(-40) + "\n[relaywarden: compressed; filter=grep; full output omitted]" : text;
       json(res, 200, { enabled: true, shadow: config.compression.shadow, filter: text.length > 120 ? "grep" : "", before: text.length, after: out.length, saved: text.length - out.length, output: out });
     });
     return;
   }
-  if (p === "/v8/management/config/plugins/configs/cpa-guard") {
+  if (p === "/v8/management/config/plugins/configs/relaywarden") {
     if (req.method === "GET") return json(res, 200, config);
     if (req.method === "PATCH") {
       let body = "";

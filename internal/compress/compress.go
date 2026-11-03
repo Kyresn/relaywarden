@@ -10,10 +10,10 @@ import (
 	"regexp"
 	"strings"
 
-	"cpa-guard/internal/config"
+	"github.com/Kyresn/relaywarden/internal/config"
 )
 
-const markerPrefix = "[cpa-guard:"
+const markerPrefix = "[relaywarden:"
 
 // Engine applies the configured filters to one tool-output blob.
 type Engine struct {

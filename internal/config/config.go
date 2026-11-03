@@ -10,25 +10,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config is the plugin-owned configuration subtree under plugins.configs.cpa-guard.
+// Config is the plugin-owned configuration subtree under plugins.configs.relaywarden.
 type Config struct {
-	Enabled     bool               `yaml:"enabled" json:"enabled"`
-	Priority    int                `yaml:"priority" json:"priority"`
-	Compression CompressionConfig  `yaml:"compression" json:"compression"`
-	PromptStyle PromptStyleConfig  `yaml:"prompt_style" json:"prompt_style"`
-	Guard       GuardConfig        `yaml:"guard" json:"guard"`
-	Routing     RoutingConfig      `yaml:"routing" json:"routing"`
-	Metrics     MetricsConfig      `yaml:"metrics" json:"metrics"`
-	UI          UIConfig           `yaml:"ui" json:"ui"`
-}
-
-// PromptStyleConfig appends behavioural style prompts to the request's system
-// text. It never rewrites tool output; the compression package owns that.
-type PromptStyleConfig struct {
-	Enabled   bool            `yaml:"enabled" json:"enabled"`
-	Caveman   string          `yaml:"caveman" json:"caveman"`
-	Ponytail  string          `yaml:"ponytail" json:"ponytail"`
-	Protocols ProtocolToggles `yaml:"protocols" json:"protocols"`
+	Enabled     bool              `yaml:"enabled" json:"enabled"`
+	Priority    int               `yaml:"priority" json:"priority"`
+	Compression CompressionConfig `yaml:"compression" json:"compression"`
+	Guard       GuardConfig       `yaml:"guard" json:"guard"`
+	Routing     RoutingConfig     `yaml:"routing" json:"routing"`
+	Metrics     MetricsConfig     `yaml:"metrics" json:"metrics"`
+	UI          UIConfig          `yaml:"ui" json:"ui"`
 }
 
 type CompressionConfig struct {
@@ -67,13 +57,6 @@ type FilterToggles struct {
 	ReadNumbered  bool `yaml:"read_numbered" json:"read_numbered"`
 	JSONMinify    bool `yaml:"json_minify" json:"json_minify"`
 	StripANSI     bool `yaml:"strip_ansi" json:"strip_ansi"`
-	RepeatDiff    bool `yaml:"repeat_diff" json:"repeat_diff"`
-	InstallLog    bool `yaml:"install_log" json:"install_log"`
-	DockerOutput  bool `yaml:"docker_output" json:"docker_output"`
-	K8sOutput     bool `yaml:"k8s_output" json:"k8s_output"`
-	Coverage      bool `yaml:"coverage" json:"coverage"`
-	StackTrace    bool `yaml:"stack_trace" json:"stack_trace"`
-	HTTPResponse  bool `yaml:"http_response" json:"http_response"`
 }
 
 type GuardConfig struct {
@@ -192,23 +175,6 @@ func Default() Config {
 				ReadNumbered:  true,
 				JSONMinify:    true,
 				StripANSI:     true,
-				RepeatDiff:    true,
-				InstallLog:    true,
-				DockerOutput:  true,
-				K8sOutput:     true,
-				Coverage:      true,
-				StackTrace:    true,
-				HTTPResponse:  true,
-			},
-		},
-		PromptStyle: PromptStyleConfig{
-			Enabled:  false,
-			Caveman:  "off",
-			Ponytail: "off",
-			Protocols: ProtocolToggles{
-				OpenAIChat:      true,
-				OpenAIResponses: true,
-				Gemini:          true,
 			},
 		},
 		Guard: GuardConfig{
@@ -268,7 +234,7 @@ func Parse(raw []byte) (Config, error) {
 	cfg := Default()
 	if len(raw) > 0 {
 		if err := yaml.Unmarshal(raw, &cfg); err != nil {
-			return Config{}, fmt.Errorf("parse cpa-guard config: %w", err)
+			return Config{}, fmt.Errorf("parse relaywarden config: %w", err)
 		}
 	}
 	if err := cfg.Normalize(); err != nil {
@@ -294,15 +260,6 @@ func (c *Config) Normalize() error {
 	clampInt(&c.Compression.MaxCharsPerResult, 256, 1024*1024)
 	clampInt(&c.Compression.MaxLinesPerResult, 10, 5000)
 	clampInt(&c.Compression.DedupThreshold, 2, 100)
-
-	if err := normalizePromptLevel("prompt_style.caveman", &c.PromptStyle.Caveman,
-		"off", "lite", "full", "ultra", "wenyan-lite", "wenyan", "wenyan-ultra"); err != nil {
-		return err
-	}
-	if err := normalizePromptLevel("prompt_style.ponytail", &c.PromptStyle.Ponytail,
-		"off", "lite", "full", "ultra"); err != nil {
-		return err
-	}
 
 	c.Guard.ObserveOnly = true
 	c.Guard.Alerts.MinSeverity = strings.ToLower(strings.TrimSpace(c.Guard.Alerts.MinSeverity))
@@ -345,20 +302,8 @@ func (c *Config) Normalize() error {
 	return nil
 }
 
-func normalizePromptLevel(field string, level *string, allowed ...string) error {
-	*level = strings.ToLower(strings.TrimSpace(*level))
-	if *level == "" {
-		*level = "off"
-	}
-	for _, a := range allowed {
-		if *level == a {
-			return nil
-		}
-	}
-	return fmt.Errorf("%s %q is not %s", field, *level, strings.Join(allowed, "|"))
-}
-
-func normalizeWeights(w Weights) Weights {	if w.TTFT < 0 {
+func normalizeWeights(w Weights) Weights {
+	if w.TTFT < 0 {
 		w.TTFT = 0
 	}
 	if w.Error < 0 {

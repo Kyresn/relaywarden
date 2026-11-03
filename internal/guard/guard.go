@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"cpa-guard/internal/config"
-	"cpa-guard/internal/protocol"
+	"github.com/Kyresn/relaywarden/internal/config"
+	"github.com/Kyresn/relaywarden/internal/protocol"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -122,7 +122,7 @@ func (g *Guard) Before(req pluginapi.RequestInterceptRequest) []byte {
 	if path == "" {
 		return nil
 	}
-	key := "cpa-guard-" + shortHash(p.SessionID+"|"+p.Model)
+	key := "relaywarden-" + shortHash(p.SessionID+"|"+p.Model)
 	out, err := sjson.SetBytes(req.Body, path, key)
 	if err != nil || len(out) == 0 {
 		return nil
@@ -484,7 +484,7 @@ func (g *Guard) emit(s Signal) {
 	g.mu.Unlock()
 
 	if cfg.Guard.Alerts.Log {
-		log.Printf("cpa-guard signal: code=%s severity=%s model=%s requested=%s auth=%s request=%s",
+		log.Printf("relaywarden signal: code=%s severity=%s model=%s requested=%s auth=%s request=%s",
 			s.Code, s.Severity, s.Model, s.RequestedModel, s.AuthID, s.RequestID)
 	}
 	if cfg.Guard.Alerts.Webhook.Enabled && severityRank[s.Severity] >= severityRank[cfg.Guard.Alerts.MinSeverity] {

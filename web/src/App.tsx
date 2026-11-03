@@ -12,7 +12,7 @@ import type { DashboardData } from "./types";
 type Tab = "overview" | "compression" | "guard" | "routing" | "alerts" | "settings";
 type ConfigEvent = { time: string; line: string; state: string; revision?: number };
 
-const LAST_CHANGE_KEY = "cpa-guard-last-change";
+const LAST_CHANGE_KEY = "relaywarden-last-change";
 
 function readLastChange(): ConfigEvent[] {
   try {
@@ -133,7 +133,7 @@ export default function App() {
   if (!data) {
     return (
       <div className="boot">
-        <div className="boot-mark">CPA GUARD</div>
+        <div className="boot-mark">RelayWarden</div>
         <div className="boot-line">{t("boot.connecting")}</div>
         {error ? <div className="inline-error">{error}</div> : null}
       </div>
@@ -154,7 +154,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true" />
-          <span className="brand-name">CPA GUARD</span>
+          <span className="brand-name">RelayWarden</span>
           <span className="brand-sub">{t("brand.sub")}</span>
         </div>
         <FlowStrip

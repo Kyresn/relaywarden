@@ -45,13 +45,13 @@ import (
 	"time"
 	"unsafe"
 
-	"cpa-guard/internal/compress"
-	"cpa-guard/internal/config"
-	"cpa-guard/internal/guard"
-	"cpa-guard/internal/management"
-	"cpa-guard/internal/metrics"
-	"cpa-guard/internal/protocol"
-	"cpa-guard/internal/routing"
+	"github.com/Kyresn/relaywarden/internal/compress"
+	"github.com/Kyresn/relaywarden/internal/config"
+	"github.com/Kyresn/relaywarden/internal/guard"
+	"github.com/Kyresn/relaywarden/internal/management"
+	"github.com/Kyresn/relaywarden/internal/metrics"
+	"github.com/Kyresn/relaywarden/internal/protocol"
+	"github.com/Kyresn/relaywarden/internal/routing"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginabi"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 )
@@ -404,10 +404,10 @@ func registrationFor(schemaVersion uint32) registration {
 	return registration{
 		SchemaVersion: schemaVersion,
 		Metadata: pluginapi.Metadata{
-			Name:             "CPA Guard",
+			Name:             "RelayWarden",
 			Version:          guard.Version,
 			Author:           "Kyresn",
-			GitHubRepository: "https://github.com/Kyresn/cpa-guard",
+			GitHubRepository: "https://github.com/Kyresn/relaywarden",
 			ConfigFields: []pluginapi.ConfigField{
 				{Name: "enabled", Type: pluginapi.ConfigFieldTypeBoolean, Default: true, Description: "Load the plugin."},
 				{Name: "compression", Type: pluginapi.ConfigFieldTypeObject, Description: "Tool-output compression settings and switches."},

@@ -1,6 +1,6 @@
-# CPA Guard management UI — surface brief
+# RelayWarden management UI — surface brief
 
-Mode: Operate. Target: `/v0/resource/plugins/cpa-guard/ui`.
+Mode: Operate. Target: `/v0/resource/plugins/relaywarden/ui`.
 
 ## Audience and job
 

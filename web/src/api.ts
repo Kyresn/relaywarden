@@ -1,6 +1,6 @@
 import type { AuthSnapshot, CompressionStats, Config, DashboardData, Signal, Status } from "./types";
 
-const KEY = "cpa-guard-key";
+const KEY = "relaywarden-key";
 
 export class MissingKeyError extends Error {}
 
@@ -54,17 +54,17 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export async function loadDashboard(): Promise<DashboardData> {
   const [status, stats, signals, routing, config] = await Promise.all([
-    request<Status>("/v0/management/cpa-guard/status"),
-    request<CompressionStats>("/v0/management/cpa-guard/compression/stats"),
-    request<{ signals: Signal[] }>("/v0/management/cpa-guard/signals?limit=100"),
-    request<{ auths: AuthSnapshot[] }>("/v0/management/cpa-guard/routing"),
-    request<Config>("/v0/management/cpa-guard/config"),
+    request<Status>("/v0/management/relaywarden/status"),
+    request<CompressionStats>("/v0/management/relaywarden/compression/stats"),
+    request<{ signals: Signal[] }>("/v0/management/relaywarden/signals?limit=100"),
+    request<{ auths: AuthSnapshot[] }>("/v0/management/relaywarden/routing"),
+    request<Config>("/v0/management/relaywarden/config"),
   ]);
   return { status, stats, signals: signals.signals ?? [], auths: routing.auths ?? [], config };
 }
 
 export async function patchConfig(patch: unknown): Promise<void> {
-  await request("/v8/management/config/plugins/configs/cpa-guard", {
+  await request("/v8/management/config/plugins/configs/relaywarden", {
     method: "PATCH",
     body: JSON.stringify(patch),
   });
@@ -79,7 +79,7 @@ export async function previewCompression(text: string, format: string): Promise<
   saved: number;
   output: string;
 }> {
-  return request("/v0/management/cpa-guard/compression/preview", {
+  return request("/v0/management/relaywarden/compression/preview", {
     method: "POST",
     body: JSON.stringify({ text, format }),
   });

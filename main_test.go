@@ -78,7 +78,7 @@ routing:
 	if len(out.Body) == 0 {
 		t.Fatalf("expected compressed body")
 	}
-	if !strings.Contains(string(out.Body), "[cpa-guard:") {
+	if !strings.Contains(string(out.Body), "[relaywarden:") {
 		t.Fatalf("marker missing: %s", out.Body)
 	}
 }

@@ -82,7 +82,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   flex: 0 0 auto;
 }
 .brand-mark.large { width: 18px; height: 18px; margin: 0 auto 18px; }
-.brand-name { font-weight: 650; letter-spacing: .06em; font-size: 13px; }
+.brand-name { font-weight: 650; letter-spacing: .01em; font-size: 13px; }
 .brand-sub { color: var(--muted); font-size: 11px; white-space: nowrap; }
 
 .topbar-meta { display: flex; justify-content: flex-end; align-items: center; gap: 10px; color: var(--muted); font-size: 11px; }
@@ -388,7 +388,7 @@ tbody tr:hover { background: rgba(61,111,180,.06); }
 .key-field span { font-size: 10px; letter-spacing: .08em; color: var(--dim); }
 .key-help { color: var(--dim); font-size: 11px; margin-top: 14px; }
 .boot { display: flex; flex-direction: column; gap: 8px; }
-.boot-mark { font-weight: 650; letter-spacing: .12em; }
+.boot-mark { font-weight: 650; letter-spacing: .04em; }
 .boot-line { color: var(--muted); }
 
 .inline-error { color: var(--red); font-size: 12px; padding: 8px 0; }

@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"cpa-guard/internal/compress"
-	"cpa-guard/internal/config"
-	"cpa-guard/internal/guard"
-	"cpa-guard/internal/metrics"
-	"cpa-guard/internal/routing"
+	"github.com/Kyresn/relaywarden/internal/compress"
+	"github.com/Kyresn/relaywarden/internal/config"
+	"github.com/Kyresn/relaywarden/internal/guard"
+	"github.com/Kyresn/relaywarden/internal/metrics"
+	"github.com/Kyresn/relaywarden/internal/routing"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 )
 
@@ -32,14 +32,14 @@ type Deps struct {
 // route with Menu becomes an unauthenticated resource route in CPA.
 func Routes() []pluginapi.ManagementRoute {
 	return []pluginapi.ManagementRoute{
-		{Method: http.MethodGet, Path: "/cpa-guard/status", Description: "Plugin status and effective switches"},
-		{Method: http.MethodGet, Path: "/cpa-guard/config", Description: "Current plugin configuration"},
-		{Method: http.MethodGet, Path: "/cpa-guard/compression/stats", Description: "Compression counters"},
-		{Method: http.MethodPost, Path: "/cpa-guard/compression/preview", Description: "Preview compression for one text blob"},
-		{Method: http.MethodGet, Path: "/cpa-guard/signals", Description: "Recent degradation signals"},
-		{Method: http.MethodGet, Path: "/cpa-guard/signals/summary", Description: "Degradation counters by code"},
-		{Method: http.MethodGet, Path: "/cpa-guard/usage", Description: "Recent usage records for diagnostics"},
-		{Method: http.MethodGet, Path: "/cpa-guard/routing", Description: "Per-auth latency and health windows"},
+		{Method: http.MethodGet, Path: "/relaywarden/status", Description: "Plugin status and effective switches"},
+		{Method: http.MethodGet, Path: "/relaywarden/config", Description: "Current plugin configuration"},
+		{Method: http.MethodGet, Path: "/relaywarden/compression/stats", Description: "Compression counters"},
+		{Method: http.MethodPost, Path: "/relaywarden/compression/preview", Description: "Preview compression for one text blob"},
+		{Method: http.MethodGet, Path: "/relaywarden/signals", Description: "Recent degradation signals"},
+		{Method: http.MethodGet, Path: "/relaywarden/signals/summary", Description: "Degradation counters by code"},
+		{Method: http.MethodGet, Path: "/relaywarden/usage", Description: "Recent usage records for diagnostics"},
+		{Method: http.MethodGet, Path: "/relaywarden/routing", Description: "Per-auth latency and health windows"},
 	}
 }
 
@@ -48,7 +48,7 @@ func Routes() []pluginapi.ManagementRoute {
 func Resources(assets fs.FS) []pluginapi.ResourceRoute {
 	out := []pluginapi.ResourceRoute{{
 		Path:        "/ui",
-		Menu:        "CPA Guard",
+		Menu:        "RelayWarden",
 		Description: "Compression, fidelity alerts, and latency routing for this gateway.",
 	}}
 	if assets == nil {
@@ -70,15 +70,15 @@ func Handle(req pluginapi.ManagementRequest, deps Deps) pluginapi.ManagementResp
 	}
 	path := normalizePath(req.Path)
 	switch {
-	case req.Method == http.MethodGet && path == "/cpa-guard/status":
+	case req.Method == http.MethodGet && path == "/relaywarden/status":
 		return jsonResponse(status(deps))
-	case req.Method == http.MethodGet && path == "/cpa-guard/config":
+	case req.Method == http.MethodGet && path == "/relaywarden/config":
 		return jsonResponse(deps.Config.Load())
-	case req.Method == http.MethodGet && path == "/cpa-guard/compression/stats":
+	case req.Method == http.MethodGet && path == "/relaywarden/compression/stats":
 		return jsonResponse(deps.Metrics.Snapshot())
-	case req.Method == http.MethodPost && path == "/cpa-guard/compression/preview":
+	case req.Method == http.MethodPost && path == "/relaywarden/compression/preview":
 		return preview(req, deps)
-	case req.Method == http.MethodGet && path == "/cpa-guard/signals":
+	case req.Method == http.MethodGet && path == "/relaywarden/signals":
 		limit := 100
 		if raw := req.Query.Get("limit"); raw != "" {
 			if n, err := strconv.Atoi(raw); err == nil && n > 0 {
@@ -86,14 +86,14 @@ func Handle(req pluginapi.ManagementRequest, deps Deps) pluginapi.ManagementResp
 			}
 		}
 		return jsonResponse(map[string]any{"signals": deps.Guard.Signals(limit)})
-	case req.Method == http.MethodGet && path == "/cpa-guard/signals/summary":
+	case req.Method == http.MethodGet && path == "/relaywarden/signals/summary":
 		return jsonResponse(map[string]any{"counters": deps.Guard.Summary()})
-	case req.Method == http.MethodGet && path == "/cpa-guard/usage":
+	case req.Method == http.MethodGet && path == "/relaywarden/usage":
 		return jsonResponse(map[string]any{"records": deps.Guard.RecentUsage(20)})
-	case req.Method == http.MethodGet && path == "/cpa-guard/routing":
+	case req.Method == http.MethodGet && path == "/relaywarden/routing":
 		return jsonResponse(map[string]any{"auths": deps.Routing.Snapshot()})
 	default:
-		return errorResponse(http.StatusNotFound, "not_found", "unknown cpa-guard management path")
+		return errorResponse(http.StatusNotFound, "not_found", "unknown relaywarden management path")
 	}
 }
 
@@ -169,11 +169,11 @@ func serveResource(req pluginapi.ManagementRequest, deps Deps) pluginapi.Managem
 		return errorResponse(http.StatusServiceUnavailable, "ui_unavailable", "management UI assets are not embedded")
 	}
 	p := req.Path
-	idx := strings.Index(p, "/cpa-guard")
+	idx := strings.Index(p, "/relaywarden")
 	if idx < 0 {
-		return errorResponse(http.StatusNotFound, "not_found", "unknown cpa-guard resource path")
+		return errorResponse(http.StatusNotFound, "not_found", "unknown relaywarden resource path")
 	}
-	rel := p[idx+len("/cpa-guard"):]
+	rel := p[idx+len("/relaywarden"):]
 	rel = strings.TrimPrefix(rel, "/ui")
 	if rel == "" || rel == "/" {
 		rel = "/index.html"
@@ -217,7 +217,7 @@ func serveResource(req pluginapi.ManagementRequest, deps Deps) pluginapi.Managem
 
 func normalizePath(path string) string {
 	path = strings.TrimSpace(path)
-	if i := strings.Index(path, "/cpa-guard/"); i >= 0 {
+	if i := strings.Index(path, "/relaywarden/"); i >= 0 {
 		path = path[i:]
 	}
 	if !strings.HasPrefix(path, "/") {

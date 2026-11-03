@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"cpa-guard/internal/config"
+	"github.com/Kyresn/relaywarden/internal/config"
 )
 
 var ansiRE = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
@@ -105,7 +105,7 @@ func gitDiff(text string, cfg config.CompressionConfig) string {
 	flushSkipped()
 	flushSummary()
 	if truncated {
-		out = append(out, "[full diff omitted by cpa-guard]")
+		out = append(out, "[full diff omitted by relaywarden]")
 	}
 	return strings.Join(out, "\n")
 }

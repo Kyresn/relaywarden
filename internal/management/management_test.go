@@ -6,10 +6,10 @@ import (
 	"testing/fstest"
 	"time"
 
-	"cpa-guard/internal/config"
-	"cpa-guard/internal/guard"
-	"cpa-guard/internal/metrics"
-	"cpa-guard/internal/routing"
+	"github.com/Kyresn/relaywarden/internal/config"
+	"github.com/Kyresn/relaywarden/internal/guard"
+	"github.com/Kyresn/relaywarden/internal/metrics"
+	"github.com/Kyresn/relaywarden/internal/routing"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 )
 
@@ -38,7 +38,7 @@ compression:
 func TestStatusAndPreview(t *testing.T) {
 	d := deps(t)
 	defer d.Guard.Close()
-	resp := Handle(pluginapi.ManagementRequest{Method: "GET", Path: "/cpa-guard/status"}, d)
+	resp := Handle(pluginapi.ManagementRequest{Method: "GET", Path: "/relaywarden/status"}, d)
 	if resp.StatusCode != 200 || len(resp.Body) == 0 {
 		t.Fatalf("status = %d", resp.StatusCode)
 	}
@@ -51,7 +51,7 @@ func TestStatusAndPreview(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(map[string]string{"text": "src/main.go:1:match\nsrc/main.go:2:match\n", "format": "openai"})
-	resp = Handle(pluginapi.ManagementRequest{Method: "POST", Path: "/cpa-guard/compression/preview", Body: body}, d)
+	resp = Handle(pluginapi.ManagementRequest{Method: "POST", Path: "/relaywarden/compression/preview", Body: body}, d)
 	if resp.StatusCode != 200 {
 		t.Fatalf("preview = %d: %s", resp.StatusCode, resp.Body)
 	}
@@ -60,14 +60,14 @@ func TestStatusAndPreview(t *testing.T) {
 func TestResourceServingAndCSP(t *testing.T) {
 	d := deps(t)
 	defer d.Guard.Close()
-	resp := Handle(pluginapi.ManagementRequest{Method: "GET", Path: "/v0/resource/plugins/cpa-guard/ui"}, d)
+	resp := Handle(pluginapi.ManagementRequest{Method: "GET", Path: "/v0/resource/plugins/relaywarden/ui"}, d)
 	if resp.StatusCode != 200 || string(resp.Body) != "<html>ok</html>" {
 		t.Fatalf("index = %d %s", resp.StatusCode, resp.Body)
 	}
 	if resp.Headers.Get("Content-Security-Policy") == "" {
 		t.Fatal("missing CSP")
 	}
-	resp = Handle(pluginapi.ManagementRequest{Method: "GET", Path: "/v0/resource/plugins/cpa-guard/ui/assets/app.js"}, d)
+	resp = Handle(pluginapi.ManagementRequest{Method: "GET", Path: "/v0/resource/plugins/relaywarden/ui/assets/app.js"}, d)
 	if resp.StatusCode != 200 || resp.Headers.Get("Cache-Control") == "" {
 		t.Fatalf("asset = %d", resp.StatusCode)
 	}
@@ -79,7 +79,7 @@ func TestResourceServingAndCSP(t *testing.T) {
 func TestUnknownPath(t *testing.T) {
 	d := deps(t)
 	defer d.Guard.Close()
-	resp := Handle(pluginapi.ManagementRequest{Method: "GET", Path: "/cpa-guard/nope"}, d)
+	resp := Handle(pluginapi.ManagementRequest{Method: "GET", Path: "/relaywarden/nope"}, d)
 	if resp.StatusCode != 404 {
 		t.Fatalf("status = %d", resp.StatusCode)
 	}

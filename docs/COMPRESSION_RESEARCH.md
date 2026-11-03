@@ -1,7 +1,7 @@
 # Compression research
 
-Status: design research, not CPA Guard measurements. Numbers below are upstream
-claims from dsh and OmniRoute unless marked otherwise. CPA Guard must produce its
+Status: design research, not RelayWarden measurements. Numbers below are upstream
+claims from dsh and OmniRoute unless marked otherwise. RelayWarden must produce its
 own numbers before changing defaults.
 
 ## Sources read
@@ -26,7 +26,7 @@ own numbers before changing defaults.
 
 ## Method matrix
 
-| Method | Best input | Claimed saving | Risk | CPA Guard v1 |
+| Method | Best input | Claimed saving | Risk | RelayWarden v1 |
 |---|---|---|---|---|
 | RTK command-aware filters | git, grep, find, ls, build/test logs | 60–90% on matched output | removes context the model needed | yes |
 | ANSI/progress cleanup | any terminal output | 1–15% | almost none | yes, pre-pass |
@@ -77,7 +77,7 @@ is deterministic, so a retry sends the same bytes.
 6. Benchmark 1 KB / 100 KB / 1 MB bodies; target p99 plugin overhead under 5 ms
    for 100 KB on the operator's machine.
 
-No CPA Guard benchmark result exists yet. Do not quote upstream numbers as CPA
+No RelayWarden benchmark result exists yet. Do not quote upstream numbers as CPA
 Guard performance.
 
 ## Local benchmark (this machine)

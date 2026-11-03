@@ -4,7 +4,7 @@ web:
 	cd web && npm ci && npm run build
 
 build: web
-	CGO_ENABLED=1 go build -buildmode=c-shared -o plugins/cpa-guard.dll .
+	CGO_ENABLED=1 go build -buildmode=c-shared -o plugins/relaywarden.dll .
 
 test:
 	go test ./...

@@ -1,0 +1,87 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+      - name: Build management UI
+        run: |
+          npm ci --prefix web
+          npm run build --prefix web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+          if-no-files-found: error
+
+  build:
+    needs: web
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: relaywarden-linux-amd64.so
+            ext: so
+          - os: macos-latest
+            artifact: relaywarden-darwin-arm64.dylib
+            ext: dylib
+          - os: windows-latest
+            artifact: relaywarden-windows-amd64.dll
+            ext: dll
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.x"
+          cache: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+      - name: Install MinGW (Windows)
+        if: runner.os == 'Windows'
+        run: choco install mingw --no-progress -y
+      - name: Build shared library
+        shell: bash
+        run: |
+          mkdir -p dist
+          CGO_ENABLED=1 go build -buildmode=c-shared -o "dist/${{ matrix.artifact }}" .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: relaywarden-*
+          path: dist
+          merge-multiple: true
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes
