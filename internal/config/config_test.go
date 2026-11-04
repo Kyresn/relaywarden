@@ -69,4 +69,17 @@ func TestInvalidEnumsRejected(t *testing.T) {
 	if cfg, err := Parse(nil); err != nil || cfg.Caveman.Level != "off" || cfg.Ponytail.Level != "off" {
 		t.Fatalf("style levels must default to off: %+v %v", cfg.Caveman, err)
 	}
+	if _, err := Parse([]byte("replay:\n  enabled: true\n  stream: false\n  nonstream: false\n")); err == nil {
+		t.Fatal("expected replay both-off error")
+	}
+	if _, err := Parse([]byte("replay:\n  backend: postgres\n  allow_memory_fallback: false\n")); err == nil {
+		t.Fatal("expected missing dsn error")
+	}
+	cfg, err := Parse([]byte("replay:\n  backend: postgres\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Replay.Backend != "memory" {
+		t.Fatalf("expected fallback to memory, got %q", cfg.Replay.Backend)
+	}
 }

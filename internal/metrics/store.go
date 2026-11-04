@@ -40,6 +40,7 @@ type Store struct {
 	byFormat map[string]*Counter
 	style    StyleCounter
 	byStyle  map[string]*StyleCounter
+	replay   ReplayCounter
 }
 
 // StyleCounter counts behaviour-prompt injections.
@@ -127,6 +128,27 @@ func (s *Store) RecordStyle(caveman, ponytail string, injected, stripped, failed
 	}
 }
 
+// ReplayCounter counts reasoning-replay activity.
+type ReplayCounter struct {
+	Generated int64 `json:"generated"`
+	Restored  int64 `json:"restored"`
+	Invalid   int64 `json:"invalid"`
+	Foreign   int64 `json:"foreign"`
+}
+
+// RecordReplay adds one replay pass to the counters.
+func (s *Store) RecordReplay(generated, restored, invalid, foreign int) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.replay.Generated += int64(generated)
+	s.replay.Restored += int64(restored)
+	s.replay.Invalid += int64(invalid)
+	s.replay.Foreign += int64(foreign)
+}
+
 func styleFor(m map[string]*StyleCounter, key string) *StyleCounter {
 	c := m[key]
 	if c == nil {
@@ -156,6 +178,7 @@ type Snapshot struct {
 	ByFormat []NamedCounter      `json:"by_format"`
 	Style    StyleCounter        `json:"style"`
 	ByStyle  []NamedStyleCounter `json:"by_style"`
+	Replay   ReplayCounter       `json:"replay"`
 }
 
 func (s *Store) Snapshot() Snapshot {
@@ -164,7 +187,7 @@ func (s *Store) Snapshot() Snapshot {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := Snapshot{Total: s.total, Shadow: s.shadow, Style: s.style}
+	out := Snapshot{Total: s.total, Shadow: s.shadow, Style: s.style, Replay: s.replay}
 	out.ByFilter = named(s.byFilter)
 	out.ByModel = named(s.byModel)
 	out.ByFormat = named(s.byFormat)

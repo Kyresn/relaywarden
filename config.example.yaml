@@ -93,6 +93,19 @@ plugins:
           error: 0.25
           degrade: 0.15
 
+      # Reasoning replay: keeps the upstream reasoning payload server-side and
+      # restores it on the next turn. Off by default.
+      replay:
+        enabled: false
+        backend: memory        # memory | postgres
+        allow_memory_fallback: true
+        postgres:
+          dsn: ""              # empty + fallback on = memory mode
+        ttl_hours: 24
+        max_bytes: 536870912
+        stream: true
+        nonstream: true
+
       # Behaviour prompts appended to the system text. Output tokens shrink;
       # user messages and tool output are never rewritten. "off" disables.
       caveman:

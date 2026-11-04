@@ -17,6 +17,7 @@ type Config struct {
 	Compression CompressionConfig `yaml:"compression" json:"compression"`
 	Guard       GuardConfig       `yaml:"guard" json:"guard"`
 	Routing     RoutingConfig     `yaml:"routing" json:"routing"`
+	Replay      ReplayConfig      `yaml:"replay" json:"replay"`
 	Caveman     StyleConfig       `yaml:"caveman" json:"caveman"`
 	Ponytail    StyleConfig       `yaml:"ponytail" json:"ponytail"`
 	Metrics     MetricsConfig     `yaml:"metrics" json:"metrics"`
@@ -136,6 +137,23 @@ var (
 	PonytailLevels = []string{"off", "lite", "full", "ultra"}
 )
 
+// ReplayConfig holds the reasoning-replay settings.
+type ReplayConfig struct {
+	Enabled             bool           `yaml:"enabled" json:"enabled"`
+	Backend             string         `yaml:"backend" json:"backend"`
+	AllowMemoryFallback bool           `yaml:"allow_memory_fallback" json:"allow_memory_fallback"`
+	Postgres            PostgresConfig `yaml:"postgres" json:"postgres"`
+	TTLHours            int            `yaml:"ttl_hours" json:"ttl_hours"`
+	MaxBytes            int64          `yaml:"max_bytes" json:"max_bytes"`
+	Stream              bool           `yaml:"stream" json:"stream"`
+	Nonstream           bool           `yaml:"nonstream" json:"nonstream"`
+}
+
+// PostgresConfig points at the plugin's own database.
+type PostgresConfig struct {
+	DSN string `yaml:"dsn" json:"dsn"`
+}
+
 // StyleConfig holds one behaviour-prompt family. Level is the switch: "off"
 // means inject nothing, so there is no separate enabled flag to contradict it.
 type StyleConfig struct {
@@ -242,6 +260,14 @@ func Default() Config {
 		UI:       UIConfig{Enabled: true, PollIntervalMS: 2000},
 		Caveman:  StyleConfig{Level: "off"},
 		Ponytail: StyleConfig{Level: "off"},
+		Replay: ReplayConfig{
+			Backend:             "memory",
+			AllowMemoryFallback: true,
+			TTLHours:            24,
+			MaxBytes:            512 << 20,
+			Stream:              true,
+			Nonstream:           true,
+		},
 	}
 }
 
@@ -313,6 +339,32 @@ func (c *Config) Normalize() error {
 	clampInt(&c.Routing.MinSamples, 1, 100)
 	clampInt(&c.Routing.AffinityTTLSeconds, 60, 86400*7)
 	c.Routing.Weights = normalizeWeights(c.Routing.Weights)
+
+	c.Replay.Backend = strings.ToLower(strings.TrimSpace(c.Replay.Backend))
+	if c.Replay.Backend == "" {
+		c.Replay.Backend = "memory"
+	}
+	switch c.Replay.Backend {
+	case "memory", "postgres":
+	default:
+		return fmt.Errorf("replay.backend %q is not memory|postgres", c.Replay.Backend)
+	}
+	if c.Replay.Enabled && !c.Replay.Stream && !c.Replay.Nonstream {
+		return errors.New("replay: stream and nonstream are both off, so replay would never run")
+	}
+	if c.Replay.Backend == "postgres" && strings.TrimSpace(c.Replay.Postgres.DSN) == "" {
+		if !c.Replay.AllowMemoryFallback {
+			return errors.New("replay.postgres.dsn is required when backend is postgres and memory fallback is off")
+		}
+		c.Replay.Backend = "memory"
+	}
+	clampInt(&c.Replay.TTLHours, 1, 24*30)
+	if c.Replay.MaxBytes < 1<<20 {
+		c.Replay.MaxBytes = 1 << 20
+	}
+	if c.Replay.MaxBytes > 64<<30 {
+		c.Replay.MaxBytes = 64 << 30
+	}
 
 	c.Caveman.Level = strings.ToLower(strings.TrimSpace(c.Caveman.Level))
 	if c.Caveman.Level == "" {

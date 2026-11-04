@@ -141,6 +141,52 @@ guard:
 	}
 }
 
+func TestReplayRoundTrip(t *testing.T) {
+	register(t, `
+enabled: true
+compression:
+  enabled: false
+replay:
+  enabled: true
+  backend: memory
+`)
+	resp := []byte(`{"output":[{"type":"reasoning","encrypted_content":"abc"},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hi"}]}]}`)
+	var captured pluginapi.PayloadResponse
+	call(t, "response.normalize_before", pluginapi.ResponseTransformRequest{
+		FromFormat: "openai-response", ToFormat: "openai", Model: "gpt-5.5", Body: resp,
+	}, &captured)
+	if !strings.Contains(string(captured.Body), "<!--rw-replay:") {
+		t.Fatalf("marker missing from captured response: %s", captured.Body)
+	}
+
+	var parsed struct {
+		Output []struct {
+			Content []struct {
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"output"`
+	}
+	if err := json.Unmarshal(captured.Body, &parsed); err != nil {
+		t.Fatal(err)
+	}
+	marker := parsed.Output[1].Content[0].Text
+	start := strings.Index(marker, "<!--rw-replay:")
+	end := strings.Index(marker[start:], "-->") + start + len("-->")
+	marker = marker[start:end]
+
+	req := []byte(`{"input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"go"}]},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hi ` + marker + `"}]}]}`)
+	var restored pluginapi.PayloadResponse
+	call(t, "request.normalize", pluginapi.RequestTransformRequest{
+		FromFormat: "openai", ToFormat: "openai-response", Model: "gpt-5.5", Body: req,
+	}, &restored)
+	if !strings.Contains(string(restored.Body), `"encrypted_content":"abc"`) {
+		t.Fatalf("reasoning item not restored: %s", restored.Body)
+	}
+	if strings.Contains(string(restored.Body), "<!--rw-replay:") {
+		t.Fatalf("marker survived restore: %s", restored.Body)
+	}
+}
+
 func TestModelMismatchSignal(t *testing.T) {
 	register(t, `
 enabled: true

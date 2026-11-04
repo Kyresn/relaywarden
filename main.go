@@ -52,6 +52,7 @@ import (
 	"github.com/Kyresn/relaywarden/internal/management"
 	"github.com/Kyresn/relaywarden/internal/metrics"
 	"github.com/Kyresn/relaywarden/internal/protocol"
+	"github.com/Kyresn/relaywarden/internal/replay"
 	"github.com/Kyresn/relaywarden/internal/routing"
 	"github.com/Kyresn/relaywarden/internal/style"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginabi"
@@ -82,12 +83,14 @@ type registration struct {
 }
 
 type registrationCapability struct {
-	RequestInterceptor     bool `json:"request_interceptor"`
-	RequestLifecyclePlugin bool `json:"request_lifecycle_plugin"`
-	ResponseInterceptor    bool `json:"response_interceptor"`
-	UsagePlugin            bool `json:"usage_plugin"`
-	Scheduler              bool `json:"scheduler"`
-	ManagementAPI          bool `json:"management_api"`
+	RequestNormalizer        bool `json:"request_normalizer"`
+	RequestInterceptor       bool `json:"request_interceptor"`
+	RequestLifecyclePlugin   bool `json:"request_lifecycle_plugin"`
+	ResponseBeforeTranslator bool `json:"response_before_translator"`
+	ResponseInterceptor      bool `json:"response_interceptor"`
+	UsagePlugin              bool `json:"usage_plugin"`
+	Scheduler                bool `json:"scheduler"`
+	ManagementAPI            bool `json:"management_api"`
 }
 
 type pluginState struct {
@@ -96,6 +99,8 @@ type pluginState struct {
 	guard         *guard.Guard
 	routing       *routing.Stats
 	metrics       *metrics.Store
+	replay        *replay.Engine
+	replayStore   replay.Store
 	started       time.Time
 	closed        bool
 	schemaVersion uint32
@@ -193,6 +198,18 @@ func handleMethod(method string, raw []byte) ([]byte, error) {
 			return nil, err
 		}
 		return okEnvelope(state.interceptAfter(req))
+	case pluginabi.MethodRequestNormalize:
+		var req pluginapi.RequestTransformRequest
+		if err := json.Unmarshal(raw, &req); err != nil {
+			return nil, err
+		}
+		return okEnvelope(pluginapi.PayloadResponse{Body: state.normalizeRequest(req)})
+	case pluginabi.MethodResponseNormalizeBefore:
+		var req pluginapi.ResponseTransformRequest
+		if err := json.Unmarshal(raw, &req); err != nil {
+			return nil, err
+		}
+		return okEnvelope(pluginapi.PayloadResponse{Body: state.normalizeResponse(req)})
 	case pluginabi.MethodResponseInterceptAfter:
 		var req pluginapi.ResponseInterceptRequest
 		if err := json.Unmarshal(raw, &req); err != nil {
@@ -253,6 +270,8 @@ func (s *pluginState) configure(raw []byte, hostSchema uint32) error {
 		s.guard = guard.New(store)
 		s.routing = routing.New()
 		s.metrics = metrics.New()
+		s.replayStore = replay.NewMemory()
+		s.replay = replay.New(store.Load().Replay, s.replayStore)
 		s.closed = false
 		return nil
 	}
@@ -268,6 +287,10 @@ func (s *pluginState) configure(raw []byte, hostSchema uint32) error {
 	if s.metrics == nil {
 		s.metrics = metrics.New()
 	}
+	if s.replayStore == nil {
+		s.replayStore = replay.NewMemory()
+	}
+	s.replay = replay.New(s.cfg.Load().Replay, s.replayStore)
 	s.closed = false
 	return nil
 }
@@ -323,6 +346,38 @@ func compressionEnabledFor(cfg *config.Config, format string) bool {
 	default:
 		return false
 	}
+}
+
+// normalizeRequest expands replay markers after the host has translated the
+// client history into the provider payload.
+func (s *pluginState) normalizeRequest(req pluginapi.RequestTransformRequest) []byte {
+	s.mu.Lock()
+	engine := s.replay
+	s.mu.Unlock()
+	if engine == nil {
+		return req.Body
+	}
+	body, res := engine.NormalizeRequest(req.Body, req.ToFormat)
+	if s.metrics != nil {
+		s.metrics.RecordReplay(0, res.Restored, res.Invalid, res.Foreign)
+	}
+	return body
+}
+
+// normalizeResponse stores this turn's reasoning items and leaves a marker in
+// the assistant content, before the host translates the response to the client.
+func (s *pluginState) normalizeResponse(req pluginapi.ResponseTransformRequest) []byte {
+	s.mu.Lock()
+	engine := s.replay
+	s.mu.Unlock()
+	if engine == nil {
+		return req.Body
+	}
+	body, res := engine.NormalizeResponse(req.Body, req.FromFormat, req.Stream)
+	if s.metrics != nil {
+		s.metrics.RecordReplay(res.Generated, 0, 0, 0)
+	}
+	return body
 }
 
 func (s *pluginState) interceptBefore(req pluginapi.RequestInterceptRequest) pluginapi.RequestInterceptResponse {
@@ -438,6 +493,7 @@ func registrationFor(schemaVersion uint32) registration {
 				{Name: "compression", Type: pluginapi.ConfigFieldTypeObject, Description: "Tool-output compression settings and switches."},
 				{Name: "guard", Type: pluginapi.ConfigFieldTypeObject, Description: "Fidelity observation and alert settings."},
 				{Name: "routing", Type: pluginapi.ConfigFieldTypeObject, Description: "Cache-affinity and latency-aware scheduling."},
+				{Name: "replay", Type: pluginapi.ConfigFieldTypeObject, Description: "Reasoning-replay storage settings and switches."},
 				{Name: "caveman", Type: pluginapi.ConfigFieldTypeObject, Description: "Terse-answer behaviour prompt level."},
 				{Name: "ponytail", Type: pluginapi.ConfigFieldTypeObject, Description: "Minimal-code behaviour prompt level."},
 				{Name: "metrics", Type: pluginapi.ConfigFieldTypeObject, Description: "In-memory counters and signal retention."},
@@ -445,12 +501,14 @@ func registrationFor(schemaVersion uint32) registration {
 			},
 		},
 		Capabilities: registrationCapability{
-			RequestInterceptor:     true,
-			RequestLifecyclePlugin: true,
-			ResponseInterceptor:    true,
-			UsagePlugin:            true,
-			Scheduler:              true,
-			ManagementAPI:          true,
+			RequestNormalizer:        true,
+			RequestInterceptor:       true,
+			RequestLifecyclePlugin:   true,
+			ResponseBeforeTranslator: true,
+			ResponseInterceptor:      true,
+			UsagePlugin:              true,
+			Scheduler:                true,
+			ManagementAPI:            true,
 		},
 	}
 }
