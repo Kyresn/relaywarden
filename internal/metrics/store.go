@@ -38,6 +38,21 @@ type Store struct {
 	byFilter map[string]*Counter
 	byModel  map[string]*Counter
 	byFormat map[string]*Counter
+	style    StyleCounter
+	byStyle  map[string]*StyleCounter
+}
+
+// StyleCounter counts behaviour-prompt injections.
+type StyleCounter struct {
+	Injected int64 `json:"injected"`
+	Stripped int64 `json:"stripped"`
+	Failed   int64 `json:"failed"`
+}
+
+// NamedStyleCounter is one family:level bucket.
+type NamedStyleCounter struct {
+	Name string `json:"name"`
+	StyleCounter
 }
 
 func New() *Store {
@@ -45,6 +60,7 @@ func New() *Store {
 		byFilter: make(map[string]*Counter),
 		byModel:  make(map[string]*Counter),
 		byFormat: make(map[string]*Counter),
+		byStyle:  make(map[string]*StyleCounter),
 	}
 }
 
@@ -83,6 +99,43 @@ func (s *Store) Record(model, format string, res protocol.Result, shadow bool) {
 	add(counterFor(s.byFormat, format), int64(res.Before), int64(res.After), int64(len(res.Hits)))
 }
 
+// RecordStyle counts one behaviour-prompt pass. Buckets are keyed by
+// family:level so the UI can show which level is doing work.
+func (s *Store) RecordStyle(caveman, ponytail string, injected, stripped, failed bool) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	bump := func(c *StyleCounter) {
+		if injected {
+			c.Injected++
+		}
+		if stripped {
+			c.Stripped++
+		}
+		if failed {
+			c.Failed++
+		}
+	}
+	bump(&s.style)
+	if caveman != "" && caveman != "off" {
+		bump(styleFor(s.byStyle, "caveman:"+caveman))
+	}
+	if ponytail != "" && ponytail != "off" {
+		bump(styleFor(s.byStyle, "ponytail:"+ponytail))
+	}
+}
+
+func styleFor(m map[string]*StyleCounter, key string) *StyleCounter {
+	c := m[key]
+	if c == nil {
+		c = &StyleCounter{}
+		m[key] = c
+	}
+	return c
+}
+
 func counterFor(m map[string]*Counter, key string) *Counter {
 	if key == "" {
 		key = "unknown"
@@ -96,11 +149,13 @@ func counterFor(m map[string]*Counter, key string) *Counter {
 }
 
 type Snapshot struct {
-	Total    Counter        `json:"total"`
-	Shadow   Counter        `json:"shadow"`
-	ByFilter []NamedCounter `json:"by_filter"`
-	ByModel  []NamedCounter `json:"by_model"`
-	ByFormat []NamedCounter `json:"by_format"`
+	Total    Counter             `json:"total"`
+	Shadow   Counter             `json:"shadow"`
+	ByFilter []NamedCounter      `json:"by_filter"`
+	ByModel  []NamedCounter      `json:"by_model"`
+	ByFormat []NamedCounter      `json:"by_format"`
+	Style    StyleCounter        `json:"style"`
+	ByStyle  []NamedStyleCounter `json:"by_style"`
 }
 
 func (s *Store) Snapshot() Snapshot {
@@ -109,10 +164,20 @@ func (s *Store) Snapshot() Snapshot {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	out := Snapshot{Total: s.total, Shadow: s.shadow}
+	out := Snapshot{Total: s.total, Shadow: s.shadow, Style: s.style}
 	out.ByFilter = named(s.byFilter)
 	out.ByModel = named(s.byModel)
 	out.ByFormat = named(s.byFormat)
+	out.ByStyle = namedStyle(s.byStyle)
+	return out
+}
+
+func namedStyle(m map[string]*StyleCounter) []NamedStyleCounter {
+	out := make([]NamedStyleCounter, 0, len(m))
+	for k, v := range m {
+		out = append(out, NamedStyleCounter{Name: k, StyleCounter: *v})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
 }
 

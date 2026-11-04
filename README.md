@@ -180,7 +180,7 @@ curl -H "Authorization: Bearer test-client-key" \
 ## Known limits
 
 - Claude/Anthropic client protocols are not covered.
-- No Caveman or LLMLingua prompt compression; tool-output compression is deterministic and measurable.
+- No LLMLingua prompt compression. Caveman and ponytail are behaviour prompts appended to the system text (`caveman.level` / `ponytail.level`, default `off`); they shorten answers, not input.
 - No per-chunk stream integrity checks.
 - No automatic fallback, retry, or hedging.
 - Cannot see what a relay changes after the request leaves CPA; only observable signals are recorded.

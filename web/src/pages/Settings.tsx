@@ -1,7 +1,7 @@
 import { clearKey, getKey } from "../api";
-import { NumberField, Section, ToggleRow } from "../components";
+import { NumberField, Section, Segmented, ToggleRow } from "../components";
 import { useI18n } from "../i18n";
-import type { Config, Status } from "../types";
+import type { CavemanLevel, Config, PonytailLevel, Status } from "../types";
 
 export function SettingsPage({
   config,
@@ -18,6 +18,21 @@ export function SettingsPage({
 }) {
   const key = getKey();
   const { t } = useI18n();
+  const cavemanOptions: { value: CavemanLevel; label: string }[] = [
+    { value: "off", label: t("style.off") },
+    { value: "lite", label: "lite" },
+    { value: "full", label: "full" },
+    { value: "ultra", label: "ultra" },
+    { value: "wenyan-lite", label: "文言 lite" },
+    { value: "wenyan", label: "文言" },
+    { value: "wenyan-ultra", label: "文言 ultra" },
+  ];
+  const ponytailOptions: { value: PonytailLevel; label: string }[] = [
+    { value: "off", label: t("style.off") },
+    { value: "lite", label: "lite" },
+    { value: "full", label: "full" },
+    { value: "ultra", label: "ultra" },
+  ];
   const download = () => {
     const blob = new Blob([JSON.stringify(config, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -51,6 +66,29 @@ export function SettingsPage({
             <div className="setting-value mono">{lastChange ? `${lastChange.line} → ${lastChange.state}${lastChange.revision ? ` · r${lastChange.revision}` : ""}` : t("settings.last_change.none")}</div>
             {lastChange ? <div className="setting-help mono">{new Date(lastChange.time).toLocaleTimeString(document.documentElement.lang || "zh-CN", { hour12: false })}</div> : null}
           </div>
+        </div>
+      </Section>
+
+      <Section title={t("style.title")} hint={t("style.hint")}>
+        <div className="setting">
+          <div className="setting-label">{t("style.caveman")}</div>
+          <Segmented
+            label={t("style.caveman")}
+            value={config.caveman.level}
+            options={cavemanOptions}
+            onChange={(v) => update(["caveman", "level"], v)}
+          />
+          <div className="setting-help">{t("style.caveman.hint")}</div>
+        </div>
+        <div className="setting">
+          <div className="setting-label">{t("style.ponytail")}</div>
+          <Segmented
+            label={t("style.ponytail")}
+            value={config.ponytail.level}
+            options={ponytailOptions}
+            onChange={(v) => update(["ponytail", "level"], v)}
+          />
+          <div className="setting-help">{t("style.ponytail.hint")}</div>
         </div>
       </Section>
 

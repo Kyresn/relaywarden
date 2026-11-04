@@ -83,6 +83,64 @@ routing:
 	}
 }
 
+func TestStyleInjectionAndStrip(t *testing.T) {
+	body := []byte(`{"model":"gpt-5.5","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"hi"}]}]}`)
+
+	register(t, `
+enabled: true
+compression:
+  enabled: false
+caveman:
+  level: full
+`)
+	var out pluginapi.RequestInterceptResponse
+	call(t, "request.intercept_before", pluginapi.RequestInterceptRequest{
+		RequestID: "r3", SourceFormat: "openai-response", Model: "gpt-5.5", Body: body,
+	}, &out)
+	if !strings.Contains(string(out.Body), "<!-- relaywarden-style -->") {
+		t.Fatalf("style segment missing: %s", out.Body)
+	}
+
+	register(t, `
+enabled: true
+compression:
+  enabled: false
+`)
+	var stripped pluginapi.RequestInterceptResponse
+	call(t, "request.intercept_before", pluginapi.RequestInterceptRequest{
+		RequestID: "r4", SourceFormat: "openai-response", Model: "gpt-5.5", Body: out.Body,
+	}, &stripped)
+	if string(stripped.Body) != string(body) {
+		t.Fatalf("off did not restore the original body:\n got %s\nwant %s", stripped.Body, body)
+	}
+}
+
+func TestStyleKeepsSystemPromptSignalQuiet(t *testing.T) {
+	register(t, `
+enabled: true
+compression:
+  enabled: false
+caveman:
+  level: lite
+guard:
+  enabled: true
+`)
+	body := []byte(`{"model":"gpt-5.5","instructions":"Base.","input":[]}`)
+	var out pluginapi.RequestInterceptResponse
+	call(t, "request.intercept_before", pluginapi.RequestInterceptRequest{
+		RequestID: "r5", SourceFormat: "openai-response", Model: "gpt-5.5", Body: body,
+	}, &out)
+	call(t, "request.intercept_after", pluginapi.RequestInterceptRequest{
+		RequestID: "r5", SourceFormat: "openai-response", Model: "gpt-5.5", Body: out.Body,
+	}, nil)
+	if state.guard == nil {
+		t.Fatal("guard missing")
+	}
+	if n := state.guard.Summary()["system_prompt_changed"]; n != 0 {
+		t.Fatalf("injection must not look like a user edit, got %d", n)
+	}
+}
+
 func TestModelMismatchSignal(t *testing.T) {
 	register(t, `
 enabled: true

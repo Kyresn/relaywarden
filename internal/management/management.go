@@ -128,6 +128,13 @@ func status(deps Deps) map[string]any {
 			"strategy": cfg.Routing.Strategy,
 			"auths":    len(deps.Routing.Snapshot()),
 		},
+		"style": map[string]any{
+			"caveman":  cfg.Caveman.Level,
+			"ponytail": cfg.Ponytail.Level,
+			"injected": comp.Style.Injected,
+			"stripped": comp.Style.Stripped,
+			"failed":   comp.Style.Failed,
+		},
 		"ui": map[string]any{
 			"enabled":          cfg.UI.Enabled,
 			"poll_interval_ms": cfg.UI.PollIntervalMS,

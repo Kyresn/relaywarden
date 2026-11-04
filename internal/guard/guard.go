@@ -3,6 +3,7 @@
 package guard
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"log"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/Kyresn/relaywarden/internal/config"
 	"github.com/Kyresn/relaywarden/internal/protocol"
+	"github.com/Kyresn/relaywarden/internal/style"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -219,7 +221,7 @@ func (g *Guard) After(req pluginapi.RequestInterceptRequest) []byte {
 			Detail: map[string]any{"fields": dropped, "format": req.ToFormat},
 		})
 	}
-	afterProfile := protocol.ExtractProfile(body, req.SourceFormat, req.Model)
+	afterProfile := protocol.ExtractProfile(withoutStyle(body, req.SourceFormat), req.SourceFormat, req.Model)
 	if cfg.Guard.CheckTools && cfg.Guard.Signals.ToolsChanged && !sameStringSet(entry.profile.Tools, afterProfile.Tools) {
 		g.emit(Signal{
 			Severity: SeverityHigh, Code: "tools_changed",
@@ -237,6 +239,20 @@ func (g *Guard) After(req pluginapi.RequestInterceptRequest) []byte {
 		return nil
 	}
 	return body
+}
+
+// withoutStyle removes the behaviour-prompt region this plugin injected, so the
+// system-prompt hash compares the user's own text. A real edit to the system
+// prompt still trips the signal.
+func withoutStyle(body []byte, format string) []byte {
+	if len(body) == 0 || !bytes.Contains(body, []byte(style.MarkerStart)) {
+		return body
+	}
+	res, err := style.Apply(body, format, "")
+	if err != nil || len(res.Body) == 0 {
+		return body
+	}
+	return res.Body
 }
 
 // ObserveResponse inspects a non-streaming response body.

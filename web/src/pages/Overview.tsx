@@ -23,6 +23,13 @@ export function Overview({ data }: { data: DashboardData }) {
           <Readout label={t("overview.alerts")} value={formatNumber(signals.length)} note={t("overview.alerts.note", { critical, high })} tone={critical ? "red" : high ? "amber" : "green"} />
           <Readout label={t("overview.ttft")} value={hasTTFT ? `${formatNumber(p50)} / ${formatNumber(p95)} ms` : "—"} note={t("overview.ttft.note", { n: auths.length })} tone="cobalt" />
         </div>
+        <div className="setting-help">
+          {t("overview.style", {
+            caveman: status.style.caveman,
+            ponytail: status.style.ponytail,
+            n: formatNumber(status.style.injected),
+          })}
+        </div>
       </Section>
 
       <Section title={t("overview.auths.title")} hint={t("overview.auths.hint")}>

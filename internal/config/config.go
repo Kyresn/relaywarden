@@ -17,6 +17,8 @@ type Config struct {
 	Compression CompressionConfig `yaml:"compression" json:"compression"`
 	Guard       GuardConfig       `yaml:"guard" json:"guard"`
 	Routing     RoutingConfig     `yaml:"routing" json:"routing"`
+	Caveman     StyleConfig       `yaml:"caveman" json:"caveman"`
+	Ponytail    StyleConfig       `yaml:"ponytail" json:"ponytail"`
 	Metrics     MetricsConfig     `yaml:"metrics" json:"metrics"`
 	UI          UIConfig          `yaml:"ui" json:"ui"`
 }
@@ -127,6 +129,19 @@ type Weights struct {
 	Degrade float64 `yaml:"degrade" json:"degrade"`
 }
 
+// CavemanLevels and PonytailLevels are the accepted behaviour-prompt levels.
+// "off" is a real level and means "inject nothing"; it is not the empty string.
+var (
+	CavemanLevels  = []string{"off", "lite", "full", "ultra", "wenyan-lite", "wenyan", "wenyan-ultra"}
+	PonytailLevels = []string{"off", "lite", "full", "ultra"}
+)
+
+// StyleConfig holds one behaviour-prompt family. Level is the switch: "off"
+// means inject nothing, so there is no separate enabled flag to contradict it.
+type StyleConfig struct {
+	Level string `yaml:"level" json:"level"`
+}
+
 type MetricsConfig struct {
 	Enabled    bool `yaml:"enabled" json:"enabled"`
 	MaxSignals int  `yaml:"max_signals" json:"max_signals"`
@@ -223,8 +238,10 @@ func Default() Config {
 			AffinityTTLSeconds: 1800,
 			Weights:            Weights{TTFT: 0.60, Error: 0.25, Degrade: 0.15},
 		},
-		Metrics: MetricsConfig{Enabled: true, MaxSignals: 1000},
-		UI:      UIConfig{Enabled: true, PollIntervalMS: 2000},
+		Metrics:  MetricsConfig{Enabled: true, MaxSignals: 1000},
+		UI:       UIConfig{Enabled: true, PollIntervalMS: 2000},
+		Caveman:  StyleConfig{Level: "off"},
+		Ponytail: StyleConfig{Level: "off"},
 	}
 }
 
@@ -297,6 +314,21 @@ func (c *Config) Normalize() error {
 	clampInt(&c.Routing.AffinityTTLSeconds, 60, 86400*7)
 	c.Routing.Weights = normalizeWeights(c.Routing.Weights)
 
+	c.Caveman.Level = strings.ToLower(strings.TrimSpace(c.Caveman.Level))
+	if c.Caveman.Level == "" {
+		c.Caveman.Level = "off"
+	}
+	if !containsString(CavemanLevels, c.Caveman.Level) {
+		return fmt.Errorf("caveman.level %q is not %s", c.Caveman.Level, strings.Join(CavemanLevels, "|"))
+	}
+	c.Ponytail.Level = strings.ToLower(strings.TrimSpace(c.Ponytail.Level))
+	if c.Ponytail.Level == "" {
+		c.Ponytail.Level = "off"
+	}
+	if !containsString(PonytailLevels, c.Ponytail.Level) {
+		return fmt.Errorf("ponytail.level %q is not %s", c.Ponytail.Level, strings.Join(PonytailLevels, "|"))
+	}
+
 	clampInt(&c.Metrics.MaxSignals, 10, 100000)
 	clampInt(&c.UI.PollIntervalMS, 500, 60000)
 	return nil
@@ -317,6 +349,15 @@ func normalizeWeights(w Weights) Weights {
 		return Weights{TTFT: 0.60, Error: 0.25, Degrade: 0.15}
 	}
 	return Weights{TTFT: w.TTFT / sum, Error: w.Error / sum, Degrade: w.Degrade / sum}
+}
+
+func containsString(list []string, v string) bool {
+	for _, item := range list {
+		if item == v {
+			return true
+		}
+	}
+	return false
 }
 
 func clampInt(v *int, min, max int) {

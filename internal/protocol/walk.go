@@ -42,6 +42,10 @@ func Supported(format string) bool {
 	}
 }
 
+// FormatOf maps a client-reported format string to one of openai, responses or
+// gemini, and returns "" for anything else.
+func FormatOf(format string) string { return normalizeFormat(format) }
+
 func normalizeFormat(format string) string {
 	switch strings.ToLower(strings.TrimSpace(format)) {
 	case "openai", "chat", "chat-completions":

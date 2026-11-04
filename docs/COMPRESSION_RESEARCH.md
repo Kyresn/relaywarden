@@ -33,7 +33,7 @@ own numbers before changing defaults.
 | Duplicate-line collapse | repetitive logs | 10–90% | loses repetition count unless marked | yes, `[xN]` |
 | JSON minify | structured tool output | 5–30% | none if valid JSON | yes |
 | Head/tail truncation | huge dumps | 50–95% | loses middle | yes, with explicit marker |
-| Caveman prose slimming | user/system prose | ~46% input | changes instruction following | no, switch reserved |
+| Caveman / ponytail behaviour prompts | system prompt, appended segment | output tokens; not yet measured | changes answer style | yes, default off |
 | LLMLingua-2 pruning | long prose | medium | ONNX runtime, latency | no |
 | CCR / session dedup | repeated large blocks | depends on repetition | needs retrieval contract | no |
 | Semantic summarization | any | high | model call, latency, quality risk | no |
@@ -46,7 +46,7 @@ the per-filter savings, then turns shadow off.
 
 ## Safety rules
 
-1. Never touch system/instructions/tools/user/assistant text; only tool output.
+1. Never touch system/instructions/tools/user/assistant text; only tool output. The one exception is the style module: it appends a marker-delimited instruction segment to the system text and never rewrites text already there.
 2. Skip error results (`is_error`, `status: "error"`).
 3. Skip blobs under 500 bytes or over 10 MiB.
 4. Replacement must be non-empty and strictly smaller.

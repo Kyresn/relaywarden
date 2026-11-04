@@ -60,4 +60,13 @@ func TestInvalidEnumsRejected(t *testing.T) {
 	if _, err := Parse([]byte("routing:\n  strategy: fastest\n")); err == nil {
 		t.Fatal("expected strategy error")
 	}
+	if _, err := Parse([]byte("caveman:\n  level: shouty\n")); err == nil {
+		t.Fatal("expected caveman level error")
+	}
+	if _, err := Parse([]byte("ponytail:\n  level: shouty\n")); err == nil {
+		t.Fatal("expected ponytail level error")
+	}
+	if cfg, err := Parse(nil); err != nil || cfg.Caveman.Level != "off" || cfg.Ponytail.Level != "off" {
+		t.Fatalf("style levels must default to off: %+v %v", cfg.Caveman, err)
+	}
 }

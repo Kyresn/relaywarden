@@ -93,6 +93,14 @@ plugins:
           error: 0.25
           degrade: 0.15
 
+      # Behaviour prompts appended to the system text. Output tokens shrink;
+      # user messages and tool output are never rewritten. "off" disables.
+      caveman:
+        level: off        # off | lite | full | ultra | wenyan-lite | wenyan | wenyan-ultra
+
+      ponytail:
+        level: off        # off | lite | full | ultra
+
       metrics:
         enabled: true
         max_signals: 1000

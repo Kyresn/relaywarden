@@ -86,8 +86,13 @@ export type Config = {
     weights: { ttft: number; error: number; degrade: number };
   };
   metrics: { enabled: boolean; max_signals: number };
+  caveman: { level: CavemanLevel };
+  ponytail: { level: PonytailLevel };
   ui: { enabled: boolean; poll_interval_ms: number; show_advanced: boolean };
 };
+
+export type CavemanLevel = "off" | "lite" | "full" | "ultra" | "wenyan-lite" | "wenyan" | "wenyan-ultra";
+export type PonytailLevel = "off" | "lite" | "full" | "ultra";
 
 export type Status = {
   loaded: boolean;
@@ -98,6 +103,7 @@ export type Status = {
   compression: { enabled: boolean; mode: string; shadow: boolean; tail_only: boolean; saved: number; saved_pct: number; shadow_saved: number };
   guard: { enabled: boolean; observe_only: boolean; signals: Record<string, number> };
   routing: { enabled: boolean; strategy: string; auths: number };
+  style: { caveman: string; ponytail: string; injected: number; stripped: number; failed: number };
   ui: { enabled: boolean; poll_interval_ms: number; show_advanced: boolean };
 };
 

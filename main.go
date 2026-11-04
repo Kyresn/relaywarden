@@ -37,6 +37,7 @@ extern void cliproxyPluginShutdown(void);
 import "C"
 
 import (
+	"bytes"
 	"embed"
 	"encoding/json"
 	"io/fs"
@@ -52,6 +53,7 @@ import (
 	"github.com/Kyresn/relaywarden/internal/metrics"
 	"github.com/Kyresn/relaywarden/internal/protocol"
 	"github.com/Kyresn/relaywarden/internal/routing"
+	"github.com/Kyresn/relaywarden/internal/style"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginabi"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 )
@@ -349,10 +351,33 @@ func (s *pluginState) interceptBefore(req pluginapi.RequestInterceptRequest) plu
 			}
 		}
 	}
+	body = s.applyStyle(body, req, cfg)
 	if string(body) == string(req.Body) {
 		return pluginapi.RequestInterceptResponse{}
 	}
 	return pluginapi.RequestInterceptResponse{Body: body}
+}
+
+// applyStyle strips any region this plugin injected earlier and appends the
+// current level's prompt. It runs after compression so the guard's before-profile
+// and the compressed tool output are already in place.
+func (s *pluginState) applyStyle(body []byte, req pluginapi.RequestInterceptRequest, cfg *config.Config) []byte {
+	text := style.CombinedText(cfg.Caveman.Level, cfg.Ponytail.Level)
+	if text == "" && !bytes.Contains(body, []byte(style.MarkerStart)) {
+		return body
+	}
+	res, err := style.Apply(body, req.SourceFormat, text)
+	if cfg.Metrics.Enabled && s.metrics != nil {
+		if err != nil {
+			s.metrics.RecordStyle(cfg.Caveman.Level, cfg.Ponytail.Level, false, false, true)
+		} else {
+			s.metrics.RecordStyle(cfg.Caveman.Level, cfg.Ponytail.Level, res.Injected, res.Stripped, false)
+		}
+	}
+	if err != nil || len(res.Body) == 0 {
+		return body
+	}
+	return res.Body
 }
 
 func (s *pluginState) interceptAfter(req pluginapi.RequestInterceptRequest) pluginapi.RequestInterceptResponse {
@@ -413,6 +438,8 @@ func registrationFor(schemaVersion uint32) registration {
 				{Name: "compression", Type: pluginapi.ConfigFieldTypeObject, Description: "Tool-output compression settings and switches."},
 				{Name: "guard", Type: pluginapi.ConfigFieldTypeObject, Description: "Fidelity observation and alert settings."},
 				{Name: "routing", Type: pluginapi.ConfigFieldTypeObject, Description: "Cache-affinity and latency-aware scheduling."},
+				{Name: "caveman", Type: pluginapi.ConfigFieldTypeObject, Description: "Terse-answer behaviour prompt level."},
+				{Name: "ponytail", Type: pluginapi.ConfigFieldTypeObject, Description: "Minimal-code behaviour prompt level."},
 				{Name: "metrics", Type: pluginapi.ConfigFieldTypeObject, Description: "In-memory counters and signal retention."},
 				{Name: "ui", Type: pluginapi.ConfigFieldTypeObject, Description: "Embedded management UI settings."},
 			},

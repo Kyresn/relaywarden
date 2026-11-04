@@ -213,7 +213,7 @@ npm --prefix web run build
 ## 已知限制
 
 - 不覆盖 Claude/Anthropic 客户端协议。
-- 不做 Caveman 提示词瘦身；只保留后续设计空间。
+- 不做 LLMLingua 提示词压缩。Caveman 与 ponytail 是追加到系统提示的行为指令（`caveman.level` / `ponytail.level`，默认 `off`），压缩的是回答，不是输入。
 - 不做流式逐 chunk 完整性检查；流式只依赖最终 usage。
 - 不自动降级切换、不主动重试、不并行竞速。
 - 看不到中转在离开 CPA 之后对请求/响应的二次改写；只能检测可观测信号。
