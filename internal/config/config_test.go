@@ -72,10 +72,13 @@ func TestInvalidEnumsRejected(t *testing.T) {
 	if _, err := Parse([]byte("replay:\n  enabled: true\n  stream: false\n  nonstream: false\n")); err == nil {
 		t.Fatal("expected replay both-off error")
 	}
-	if _, err := Parse([]byte("replay:\n  backend: postgres\n  allow_memory_fallback: false\n")); err == nil {
+	if _, err := Parse([]byte("replay:\n  enabled: true\n  backend: postgres\n  allow_memory_fallback: false\n")); err == nil {
 		t.Fatal("expected missing dsn error")
 	}
-	cfg, err := Parse([]byte("replay:\n  backend: postgres\n"))
+	if _, err := Parse([]byte("replay:\n  enabled: false\n  backend: postgres\n  postgres:\n    dsn: postgres://x\n")); err != nil {
+		t.Fatalf("disabled replay must not block loading: %v", err)
+	}
+	cfg, err := Parse([]byte("replay:\n  enabled: true\n  backend: postgres\n"))
 	if err != nil {
 		t.Fatal(err)
 	}

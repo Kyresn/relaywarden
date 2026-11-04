@@ -10,7 +10,9 @@ package replay
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base32"
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"time"
@@ -34,6 +36,12 @@ const (
 	Owner = "relaywarden"
 
 	separator = "\n\n"
+
+	// maxRefsPerRequest and maxRestoredBytes bound how far one request may
+	// inflate. A client can collect many refs and send them all at once; without
+	// a bound the upstream body would be limited only by the whole store.
+	maxRefsPerRequest = 64
+	maxRestoredBytes  = 8 << 20
 )
 
 var refEncoding = base32.StdEncoding.WithPadding(base32.NoPadding)
@@ -78,9 +86,16 @@ func Marker(ref string) string {
 	return MarkerPrefix + ref + MarkerSuffix
 }
 
-// FindMarkers returns every complete marker in s and s with the markers
-// removed. A marker missing its suffix is left alone: it is not provably ours.
-func FindMarkers(s string) (refs []string, cleaned string) {
+// FindMarkers returns the valid references in s, how many malformed markers were
+// removed, and s with every marker removed.
+//
+// A malformed marker is only removed when its suffix sits close behind the
+// prefix. Scanning for the next "-->" without a bound would let one dangling
+// prefix swallow a later valid marker and every character in between.
+func FindMarkers(s string) (refs []string, invalid int, cleaned string) {
+	if !strings.Contains(s, MarkerPrefix) {
+		return nil, 0, s
+	}
 	var out strings.Builder
 	rest := s
 	removed := false
@@ -90,32 +105,82 @@ func FindMarkers(s string) (refs []string, cleaned string) {
 			break
 		}
 		bodyStart := start + len(MarkerPrefix)
-		rel := strings.Index(rest[bodyStart:], MarkerSuffix)
-		if rel < 0 {
-			break
+		if bodyStart+RefLength+len(MarkerSuffix) <= len(rest) {
+			candidate := rest[bodyStart : bodyStart+RefLength]
+			if isRef(candidate) && strings.HasPrefix(rest[bodyStart+RefLength:], MarkerSuffix) {
+				refs = append(refs, candidate)
+				removed = true
+				prefix, next := cutRegion(rest, start, bodyStart+RefLength+len(MarkerSuffix))
+				out.WriteString(prefix)
+				rest = next
+				continue
+			}
 		}
-		ref := rest[bodyStart : bodyStart+rel]
-		removed = true
-		if len(ref) == RefLength {
-			refs = append(refs, ref)
+		// A malformed marker must terminate within a short window; otherwise the
+		// prefix is treated as ordinary text and scanning resumes after it.
+		if rel := strings.Index(rest[bodyStart:], MarkerSuffix); rel >= 0 && rel <= RefLength*2 {
+			invalid++
+			removed = true
+			prefix, next := cutRegion(rest, start, bodyStart+rel+len(MarkerSuffix))
+			out.WriteString(prefix)
+			rest = next
+			continue
 		}
-		prefix := rest[:start]
-		next := rest[bodyStart+rel+len(MarkerSuffix):]
-		// The marker was appended after a separator; drop one so the cleaned
-		// text matches what the model wrote.
-		if strings.HasSuffix(prefix, separator) {
-			prefix = prefix[:len(prefix)-len(separator)]
-		} else if strings.HasPrefix(next, separator) {
-			next = next[len(separator):]
-		}
-		out.WriteString(prefix)
-		rest = next
+		out.WriteString(rest[:bodyStart])
+		rest = rest[bodyStart:]
 	}
 	if !removed {
-		return nil, s
+		return nil, 0, s
 	}
 	out.WriteString(rest)
-	return refs, out.String()
+	return refs, invalid, out.String()
+}
+
+// cutRegion returns the text before start and after end, dropping one joining
+// separator so the cleaned text matches what the model wrote.
+func cutRegion(s string, start, end int) (string, string) {
+	prefix := s[:start]
+	next := s[end:]
+	if strings.HasSuffix(prefix, separator) {
+		prefix = prefix[:len(prefix)-len(separator)]
+	} else if strings.HasPrefix(next, separator) {
+		next = next[len(separator):]
+	}
+	return prefix, next
+}
+
+func isRef(s string) bool {
+	if len(s) != RefLength {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'A' && r <= 'Z':
+		case r >= '2' && r <= '7':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// ConversationKey hashes the parts of a provider request that stay stable
+// across turns of one conversation: the instructions and the first input item.
+// It binds an entry to the conversation that produced it, so a ref echoed from
+// somewhere else resolves to Foreign instead of replaying.
+func ConversationKey(providerBody []byte) string {
+	if len(providerBody) == 0 {
+		return ""
+	}
+	first := gjson.GetBytes(providerBody, "input.0")
+	if !first.Exists() {
+		return ""
+	}
+	h := sha256.New()
+	h.Write([]byte(gjson.GetBytes(providerBody, "instructions").String()))
+	h.Write([]byte{0})
+	h.Write([]byte(first.Raw))
+	return hex.EncodeToString(h.Sum(nil))[:32]
 }
 
 // NormalizeRequest restores markers in an upstream Responses payload. It is a
@@ -139,9 +204,11 @@ func (e *Engine) NormalizeRequest(body []byte, clientFormat, toFormat, model str
 		return body, res
 	}
 
+	convKey := ConversationKey(body)
 	seen := map[string]bool{}
 	out := make([]json.RawMessage, 0, len(items))
 	changed := false
+	restoredBytes := 0
 	for _, item := range items {
 		var obj map[string]json.RawMessage
 		if err := json.Unmarshal(item, &obj); err != nil {
@@ -155,7 +222,10 @@ func (e *Engine) NormalizeRequest(body []byte, clientFormat, toFormat, model str
 		var refs []string
 		changedText := false
 		edited, emptied, err := editTextParts(obj, func(s string) (string, bool) {
-			found, cleaned := FindMarkers(s)
+			found, bad, cleaned := FindMarkers(s)
+			if bad > 0 {
+				res.Invalid += bad
+			}
 			if cleaned == s {
 				return s, false
 			}
@@ -173,16 +243,28 @@ func (e *Engine) NormalizeRequest(body []byte, clientFormat, toFormat, model str
 				continue
 			}
 			seen[ref] = true
+			if len(seen) > maxRefsPerRequest {
+				res.Invalid++
+				continue
+			}
 			entry, ok := e.store.Get(ref)
 			if !ok {
 				res.Invalid++
 				continue
 			}
-			if entry.Owner != Owner || entry.FromFormat != toFormat || (entry.Model != "" && model != "" && entry.Model != model) {
+			if entry.Owner != Owner || entry.FromFormat != toFormat || !sameModel(entry.Model, model) || (entry.ConvKey != "" && convKey != "" && entry.ConvKey != convKey) {
 				res.Foreign++
 				continue
 			}
+			if restoredBytes >= maxRestoredBytes {
+				res.Invalid++
+				continue
+			}
 			for _, raw := range entry.Items {
+				if restoredBytes+len(raw) > maxRestoredBytes {
+					break
+				}
+				restoredBytes += len(raw)
 				out = append(out, raw)
 			}
 			res.Restored++
@@ -211,7 +293,7 @@ func (e *Engine) NormalizeRequest(body []byte, clientFormat, toFormat, model str
 // NormalizeResponse stores this turn's reasoning items and leaves a marker in
 // the assistant content. Only non-streaming Responses payloads are handled;
 // streaming arrives one event at a time and is a separate ticket.
-func (e *Engine) NormalizeResponse(body []byte, fromFormat, clientFormat, model string, stream bool) ([]byte, Result) {
+func (e *Engine) NormalizeResponse(body, providerRequest []byte, fromFormat, clientFormat, model string, stream bool) ([]byte, Result) {
 	res := Result{}
 	if e == nil || e.store == nil || !e.cfg.Enabled || !isResponses(fromFormat) || stream || !e.cfg.Nonstream {
 		return body, res
@@ -251,9 +333,11 @@ func (e *Engine) NormalizeResponse(body []byte, fromFormat, clientFormat, model 
 
 	out := items
 	injected := false
-	for i, item := range items {
+	// Use the last assistant message: the marker must be the final segment the
+	// client sees, and a turn may carry commentary before the final answer.
+	for i := len(items) - 1; i >= 0; i-- {
 		var obj map[string]json.RawMessage
-		if err := json.Unmarshal(item, &obj); err != nil {
+		if err := json.Unmarshal(items[i], &obj); err != nil {
 			continue
 		}
 		if !isAssistantMessage(obj) {
@@ -284,6 +368,7 @@ func (e *Engine) NormalizeResponse(body []byte, fromFormat, clientFormat, model 
 		Owner:      Owner,
 		FromFormat: fromFormat,
 		Model:      model,
+		ConvKey:    ConversationKey(providerRequest),
 		Items:      reasoning,
 		CreatedAt:  e.now(),
 		ExpiresAt:  e.now().Add(time.Duration(e.cfg.TTLHours) * time.Hour),
@@ -303,6 +388,22 @@ func (e *Engine) NormalizeResponse(body []byte, fromFormat, clientFormat, model 
 
 func isResponses(format string) bool {
 	return protocol.FormatOf(format) == "responses"
+}
+
+// sameModel compares model names after dropping a thinking suffix such as
+// "gpt-5.5(high)"; the two hooks receive the name from different layers.
+func sameModel(a, b string) bool {
+	if a == "" || b == "" {
+		return true
+	}
+	return baseModel(a) == baseModel(b)
+}
+
+func baseModel(s string) string {
+	if i := strings.IndexAny(s, "(:"); i >= 0 {
+		s = s[:i]
+	}
+	return strings.TrimSpace(strings.ToLower(s))
 }
 
 func isAssistantMessage(obj map[string]json.RawMessage) bool {
@@ -421,7 +522,6 @@ func appendTextPart(obj map[string]json.RawMessage, text string) (json.RawMessag
 	if err := json.Unmarshal(raw, &parts); err != nil {
 		return nil, err
 	}
-	// Append to the last text part, keeping every other part untouched.
 	for i := len(parts) - 1; i >= 0; i-- {
 		var p map[string]json.RawMessage
 		if err := json.Unmarshal(parts[i], &p); err != nil {

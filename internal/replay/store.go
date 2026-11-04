@@ -2,6 +2,7 @@ package replay
 
 import (
 	"encoding/json"
+	"sort"
 	"sync"
 	"time"
 )
@@ -12,6 +13,7 @@ type Entry struct {
 	Owner      string
 	FromFormat string
 	Model      string
+	ConvKey    string
 	Items      []json.RawMessage
 	CreatedAt  time.Time
 	ExpiresAt  time.Time
@@ -31,6 +33,7 @@ type Store interface {
 	Put(Entry)
 	Get(ref string) (Entry, bool)
 	Stats() Stats
+	SetMaxBytes(int64)
 }
 
 // Memory is the process-local store. Entries are lost on restart. It enforces
@@ -48,8 +51,20 @@ func NewMemory(maxBytes int64) *Memory {
 	return &Memory{entries: make(map[string]Entry), maxBytes: maxBytes, now: time.Now}
 }
 
+// SetMaxBytes updates the cap; a lower value takes effect on the next Put.
+func (m *Memory) SetMaxBytes(maxBytes int64) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	m.maxBytes = maxBytes
+	m.evictLocked("")
+	m.mu.Unlock()
+}
+
 // Put stores e, replacing any entry with the same reference, then evicts the
-// oldest entries until the store is back under its byte cap.
+// oldest entries until the store is back under its byte cap. Expired entries are
+// removed in the same pass; there is no per-Put full scan.
 func (m *Memory) Put(e Entry) {
 	if m == nil {
 		return
@@ -59,7 +74,6 @@ func (m *Memory) Put(e Entry) {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.sweepLocked()
 	if m.maxBytes > 0 && e.Bytes > m.maxBytes {
 		// One entry larger than the whole budget would evict everything and
 		// still not fit; drop it instead of thrashing the store.
@@ -70,23 +84,8 @@ func (m *Memory) Put(e Entry) {
 	}
 	m.entries[e.Ref] = e
 	m.total += e.Bytes
-	for m.maxBytes > 0 && m.total > m.maxBytes {
-		oldest := ""
-		var oldestAt time.Time
-		for ref, item := range m.entries {
-			if ref == e.Ref {
-				continue
-			}
-			if oldest == "" || item.CreatedAt.Before(oldestAt) {
-				oldest = ref
-				oldestAt = item.CreatedAt
-			}
-		}
-		if oldest == "" {
-			break
-		}
-		m.total -= m.entries[oldest].Bytes
-		delete(m.entries, oldest)
+	if m.maxBytes > 0 && m.total > m.maxBytes {
+		m.evictLocked(e.Ref)
 	}
 }
 
@@ -120,6 +119,34 @@ func (m *Memory) Stats() Stats {
 	return Stats{Entries: len(m.entries), Bytes: m.total}
 }
 
+// evictLocked removes expired entries, then the oldest live entries until the
+// store fits. keep is the reference just written and is never evicted.
+func (m *Memory) evictLocked(keep string) {
+	m.sweepLocked()
+	if m.maxBytes <= 0 || m.total <= m.maxBytes {
+		return
+	}
+	type candidate struct {
+		ref string
+		at  time.Time
+	}
+	candidates := make([]candidate, 0, len(m.entries))
+	for ref, e := range m.entries {
+		if ref == keep {
+			continue
+		}
+		candidates = append(candidates, candidate{ref: ref, at: e.CreatedAt})
+	}
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].at.Before(candidates[j].at) })
+	for _, c := range candidates {
+		if m.total <= m.maxBytes {
+			return
+		}
+		m.total -= m.entries[c.ref].Bytes
+		delete(m.entries, c.ref)
+	}
+}
+
 func (m *Memory) sweepLocked() {
 	now := m.now()
 	for ref, e := range m.entries {
@@ -131,7 +158,7 @@ func (m *Memory) sweepLocked() {
 }
 
 func entryBytes(e Entry) int64 {
-	n := int64(len(e.Ref) + len(e.Owner) + len(e.FromFormat) + len(e.Model))
+	n := int64(len(e.Ref) + len(e.Owner) + len(e.FromFormat) + len(e.Model) + len(e.ConvKey))
 	for _, item := range e.Items {
 		n += int64(len(item))
 	}

@@ -237,3 +237,65 @@ func TestResponsesInputPartType(t *testing.T) {
 		t.Fatalf("Responses input part must be input_text: %s", res.Body)
 	}
 }
+
+func TestEmptyContentIsNotDropped(t *testing.T) {
+	body := []byte(`{"messages":[{"role":"system","content":""},{"role":"user","content":"see <!-- relaywarden-style -->"}]}`)
+	res, err := Apply(body, "openai", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(res.Body), `"role":"system"`) {
+		t.Fatalf("empty system message was dropped: %s", res.Body)
+	}
+}
+
+func TestEmptyArrayContentIsNotDropped(t *testing.T) {
+	body := []byte(`{"messages":[{"role":"system","content":[]},{"role":"user","content":"see <!-- relaywarden-style -->"}]}`)
+	res, err := Apply(body, "openai", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(res.Body), `"role":"system"`) {
+		t.Fatalf("empty array message was dropped: %s", res.Body)
+	}
+}
+
+func TestResponsesStringInput(t *testing.T) {
+	body := []byte(`{"input":"hello"}`)
+	res, err := Apply(body, "responses", "PROMPT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Injected || !strings.Contains(string(res.Body), `"text":"hello"`) {
+		t.Fatalf("string input not preserved: %s", res.Body)
+	}
+	if !strings.Contains(string(res.Body), MarkerStart) {
+		t.Fatalf("prompt not injected: %s", res.Body)
+	}
+}
+
+func TestGeminiNullSystemInstruction(t *testing.T) {
+	body := []byte(`{"systemInstruction":null}`)
+	res, err := Apply(body, "gemini", "PROMPT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Injected || !strings.Contains(string(res.Body), MarkerStart) {
+		t.Fatalf("null systemInstruction not handled: %s", res.Body)
+	}
+}
+
+func TestGeminiStripKeepsSiblingKeys(t *testing.T) {
+	body := []byte(`{"systemInstruction":{"role":"system","parts":[{"text":"Base."}]}}`)
+	withPrompt, err := Apply(body, "gemini", "PROMPT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, err := Apply(withPrompt.Body, "gemini", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(back.Body), `"role":"system"`) {
+		t.Fatalf("sibling key lost: %s", back.Body)
+	}
+}

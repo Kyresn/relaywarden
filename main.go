@@ -289,6 +289,8 @@ func (s *pluginState) configure(raw []byte, hostSchema uint32) error {
 	}
 	if s.replayStore == nil {
 		s.replayStore = replay.NewMemory(s.cfg.Load().Replay.MaxBytes)
+	} else {
+		s.replayStore.SetMaxBytes(s.cfg.Load().Replay.MaxBytes)
 	}
 	s.replay = replay.New(s.cfg.Load().Replay, s.replayStore)
 	s.closed = false
@@ -358,7 +360,8 @@ func (s *pluginState) normalizeRequest(req pluginapi.RequestTransformRequest) []
 		return req.Body
 	}
 	body, res := engine.NormalizeRequest(req.Body, req.FromFormat, req.ToFormat, req.Model)
-	if s.metrics != nil {
+	cfg := s.currentConfig()
+	if cfg != nil && cfg.Metrics.Enabled && s.metrics != nil {
 		s.metrics.RecordReplay(0, res.Restored, res.Invalid, res.Foreign)
 	}
 	return body
@@ -373,8 +376,9 @@ func (s *pluginState) normalizeResponse(req pluginapi.ResponseTransformRequest) 
 	if engine == nil {
 		return req.Body
 	}
-	body, res := engine.NormalizeResponse(req.Body, req.FromFormat, req.ToFormat, req.Model, req.Stream)
-	if s.metrics != nil {
+	body, res := engine.NormalizeResponse(req.Body, req.TranslatedRequest, req.FromFormat, req.ToFormat, req.Model, req.Stream)
+	cfg := s.currentConfig()
+	if cfg != nil && cfg.Metrics.Enabled && s.metrics != nil {
 		s.metrics.RecordReplay(res.Generated, 0, 0, 0)
 	}
 	return body

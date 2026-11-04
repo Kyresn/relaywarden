@@ -175,7 +175,7 @@ func editMessage(body []byte, base, text, partType string) ([]byte, bool, bool, 
 			}
 			out = patched
 			injected = true
-		} else if len(gjson.GetBytes(out, contentPath).Array()) == 0 {
+		} else if stripped && len(gjson.GetBytes(out, contentPath).Array()) == 0 {
 			// The region was the whole message: drop the shell so the body
 			// matches the one before injection.
 			patched, err := sjson.DeleteBytes(out, base)
@@ -196,7 +196,7 @@ func editMessage(body []byte, base, text, partType string) ([]byte, bool, bool, 
 			}
 			injected = true
 		}
-		if next == "" {
+		if next == "" && stripped {
 			patched, err := sjson.DeleteBytes(out, base)
 			if err != nil {
 				return body, false, false, err
@@ -241,7 +241,7 @@ func applyResponses(body []byte, text string) (Result, error) {
 		if next == instructions.String() {
 			return res, nil
 		}
-		if next == "" {
+		if next == "" && stripped {
 			patched, err := sjson.DeleteBytes(body, "instructions")
 			if err != nil {
 				return res, err
@@ -258,6 +258,28 @@ func applyResponses(body []byte, text string) (Result, error) {
 	}
 
 	input := gjson.GetBytes(body, "input")
+	if input.Type == gjson.String && text != "" {
+		// The Responses API accepts a bare string as the whole input; expand it
+		// into a message so the system item can be added without losing it.
+		converted, err := marshalNoEscape([]any{map[string]any{
+			"type": "message",
+			"role": "user",
+			"content": []any{map[string]any{
+				"type": "input_text",
+				"text": input.String(),
+			}},
+		}})
+		if err != nil {
+			return res, err
+		}
+		patched, err := sjson.SetRawBytes(body, "input", converted)
+		if err != nil {
+			return res, err
+		}
+		body = patched
+		res.Body = patched
+		input = gjson.GetBytes(body, "input")
+	}
 	if !input.IsArray() {
 		return res, nil
 	}
@@ -305,7 +327,7 @@ func applyResponses(body []byte, text string) (Result, error) {
 
 func applyGemini(body []byte, text string) (Result, error) {
 	res := Result{Body: body}
-	if !gjson.GetBytes(body, "systemInstruction").Exists() {
+	if si := gjson.GetBytes(body, "systemInstruction"); !si.Exists() || !si.IsObject() {
 		if text == "" {
 			return res, nil
 		}
@@ -326,6 +348,19 @@ func applyGemini(body []byte, text string) (Result, error) {
 
 	parts := gjson.GetBytes(body, "systemInstruction.parts")
 	if !parts.IsArray() {
+		if text == "" {
+			return res, nil
+		}
+		block, err := marshalNoEscape(map[string]any{"text": Segment(text)})
+		if err != nil {
+			return res, err
+		}
+		patched, err := sjson.SetRawBytes(body, "systemInstruction.parts", append(append([]byte("["), block...), ']'))
+		if err != nil {
+			return res, err
+		}
+		res.Body = patched
+		res.Injected = true
 		return res, nil
 	}
 	out := body
@@ -355,7 +390,17 @@ func applyGemini(body []byte, text string) (Result, error) {
 		out = patched
 	}
 	if text == "" && len(gjson.GetBytes(out, "systemInstruction.parts").Array()) == 0 {
-		patched, err := sjson.DeleteBytes(out, "systemInstruction")
+		var obj map[string]json.RawMessage
+		_ = json.Unmarshal([]byte(gjson.GetBytes(out, "systemInstruction").Raw), &obj)
+		if len(obj) <= 1 {
+			patched, err := sjson.DeleteBytes(out, "systemInstruction")
+			if err != nil {
+				return res, err
+			}
+			res.Body = patched
+			return res, nil
+		}
+		patched, err := sjson.SetRawBytes(out, "systemInstruction.parts", []byte("[]"))
 		if err != nil {
 			return res, err
 		}

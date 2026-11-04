@@ -25,14 +25,14 @@ func TestFindMarkers(t *testing.T) {
 	if len(ref) != RefLength {
 		t.Fatalf("ref length = %d, want %d", len(ref), RefLength)
 	}
-	refs, cleaned := FindMarkers("hello\n\n" + Marker(ref))
+	refs, _, cleaned := FindMarkers("hello\n\n" + Marker(ref))
 	if len(refs) != 1 || refs[0] != ref {
 		t.Fatalf("refs = %v", refs)
 	}
 	if cleaned != "hello" {
 		t.Fatalf("cleaned = %q", cleaned)
 	}
-	if _, cleaned := FindMarkers("orphan " + MarkerPrefix + ref); cleaned != "orphan "+MarkerPrefix+ref {
+	if _, _, cleaned := FindMarkers("orphan " + MarkerPrefix + ref); cleaned != "orphan "+MarkerPrefix+ref {
 		t.Fatalf("a lone marker must be left alone")
 	}
 }
@@ -42,7 +42,7 @@ func TestCaptureAndRestore(t *testing.T) {
 	engine := New(enabledConfig(), store)
 
 	resp := []byte(`{"output":[{"type":"reasoning","encrypted_content":"abc"},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hi"}]}]}`)
-	patched, res := engine.NormalizeResponse(resp, "openai-response", "openai", "gpt-5.5", false)
+	patched, res := engine.NormalizeResponse(resp, nil, "openai-response", "openai", "gpt-5.5", false)
 	if res.Generated != 1 {
 		t.Fatalf("generated = %d", res.Generated)
 	}
@@ -50,7 +50,7 @@ func TestCaptureAndRestore(t *testing.T) {
 		t.Fatalf("marker missing: %s", patched)
 	}
 
-	refs, _ := FindMarkers(gjsonString(patched, "output.1.content.0.text"))
+	refs, _, _ := FindMarkers(gjsonString(patched, "output.1.content.0.text"))
 	if len(refs) != 1 {
 		t.Fatalf("marker not in assistant content: %s", patched)
 	}
@@ -104,12 +104,12 @@ func TestDisabledAndWrongFormatAreNoOps(t *testing.T) {
 	cfg.Enabled = false
 	engine := New(cfg, NewMemory(0))
 	body := []byte(`{"output":[{"type":"reasoning","encrypted_content":"abc"},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hi"}]}]}`)
-	out, res := engine.NormalizeResponse(body, "openai-response", "openai", "gpt-5.5", false)
+	out, res := engine.NormalizeResponse(body, nil, "openai-response", "openai", "gpt-5.5", false)
 	if res.Generated != 0 || string(out) != string(body) {
 		t.Fatalf("disabled engine changed the body")
 	}
 	on := New(enabledConfig(), NewMemory(0))
-	out, res = on.NormalizeResponse(body, "openai", "openai", "gpt-5.5", false)
+	out, res = on.NormalizeResponse(body, nil, "openai", "openai", "gpt-5.5", false)
 	if res.Generated != 0 || string(out) != string(body) {
 		t.Fatalf("non-responses format changed the body")
 	}
@@ -119,7 +119,7 @@ func TestToolCallOnlyTurn(t *testing.T) {
 	store := NewMemory(0)
 	engine := New(enabledConfig(), store)
 	resp := []byte(`{"output":[{"type":"reasoning","encrypted_content":"abc"},{"type":"function_call","name":"run","arguments":"{}"}]}`)
-	patched, res := engine.NormalizeResponse(resp, "openai-response", "openai", "gpt-5.5", false)
+	patched, res := engine.NormalizeResponse(resp, nil, "openai-response", "openai", "gpt-5.5", false)
 	if res.Generated != 1 {
 		t.Fatalf("generated = %d", res.Generated)
 	}
@@ -137,7 +137,7 @@ func TestToolCallOnlyTurn(t *testing.T) {
 	if len(parsed.Output) != 3 || parsed.Output[2].Type != "message" {
 		t.Fatalf("marker shell not appended: %s", patched)
 	}
-	refs, _ := FindMarkers(parsed.Output[2].Content[0].Text)
+	refs, _, _ := FindMarkers(parsed.Output[2].Content[0].Text)
 	if len(refs) != 1 {
 		t.Fatalf("shell has no marker: %s", patched)
 	}
@@ -158,7 +158,7 @@ func TestToolCallOnlyTurn(t *testing.T) {
 func TestStreamingIsSkipped(t *testing.T) {
 	engine := New(enabledConfig(), NewMemory(0))
 	body := []byte(`{"output":[{"type":"reasoning","encrypted_content":"abc"},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hi"}]}]}`)
-	out, res := engine.NormalizeResponse(body, "openai-response", "openai", "gpt-5.5", true)
+	out, res := engine.NormalizeResponse(body, nil, "openai-response", "openai", "gpt-5.5", true)
 	if res.Generated != 0 || string(out) != string(body) {
 		t.Fatalf("streaming must be skipped in this ticket")
 	}
@@ -175,7 +175,7 @@ func TestMemoryStoreExpires(t *testing.T) {
 func TestMultiPartContentIsPreserved(t *testing.T) {
 	engine := New(enabledConfig(), NewMemory(0))
 	resp := []byte(`{"output":[{"type":"reasoning","encrypted_content":"abc"},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"first"},{"type":"output_text","text":"second"}]}]}`)
-	patched, res := engine.NormalizeResponse(resp, "openai-response", "openai", "gpt-5.5", false)
+	patched, res := engine.NormalizeResponse(resp, nil, "openai-response", "openai", "gpt-5.5", false)
 	if res.Generated != 1 {
 		t.Fatalf("generated = %d", res.Generated)
 	}
@@ -196,7 +196,7 @@ func TestMultiPartContentIsPreserved(t *testing.T) {
 	if parts[0].Text != "first" {
 		t.Fatalf("first part was rewritten: %q", parts[0].Text)
 	}
-	refs, _ := FindMarkers(parts[1].Text)
+	refs, _, _ := FindMarkers(parts[1].Text)
 	if len(refs) != 1 {
 		t.Fatalf("marker not on the last part: %q", parts[1].Text)
 	}
@@ -241,7 +241,7 @@ func gjsonString(body []byte, path string) string {
 func TestCaptureFromWrappedCompletedEvent(t *testing.T) {
 	engine := New(enabledConfig(), NewMemory(0))
 	body := []byte(`{"type":"response.completed","response":{"output":[{"type":"reasoning","encrypted_content":"abc"},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hi"}]}]}}`)
-	patched, res := engine.NormalizeResponse(body, "openai-response", "openai", "gpt-5.5", false)
+	patched, res := engine.NormalizeResponse(body, nil, "openai-response", "openai", "gpt-5.5", false)
 	if res.Generated != 1 {
 		t.Fatalf("generated = %d", res.Generated)
 	}
@@ -256,7 +256,7 @@ func TestCaptureFromWrappedCompletedEvent(t *testing.T) {
 func TestNativeResponsesClientIsSkipped(t *testing.T) {
 	engine := New(enabledConfig(), NewMemory(0))
 	body := []byte(`{"output":[{"type":"reasoning","encrypted_content":"abc"},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hi"}]}]}`)
-	out, res := engine.NormalizeResponse(body, "openai-response", "openai-response", "gpt-5.5", false)
+	out, res := engine.NormalizeResponse(body, nil, "openai-response", "openai-response", "gpt-5.5", false)
 	if res.Generated != 0 || string(out) != string(body) {
 		t.Fatalf("native Responses clients must not get markers")
 	}
@@ -280,5 +280,108 @@ func TestMemoryEvictsOldest(t *testing.T) {
 	}
 	if _, ok := store.Get("b"); !ok {
 		t.Fatal("newest entry should remain")
+	}
+}
+
+func TestFindMarkersDoesNotSwallowLaterText(t *testing.T) {
+	ref := NewRef()
+	input := "start <!--rw-replay:broken then " + Marker(ref)
+	refs, _, cleaned := FindMarkers(input)
+	if len(refs) != 1 || refs[0] != ref {
+		t.Fatalf("valid marker lost: refs=%v", refs)
+	}
+	if !strings.Contains(cleaned, "broken then") {
+		t.Fatalf("text between markers was eaten: %q", cleaned)
+	}
+}
+
+func TestMalformedMarkerCountsInvalid(t *testing.T) {
+	engine := New(enabledConfig(), NewMemory(0))
+	req := []byte(`{"input":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hi <!--rw-replay:abc-->"}]}]}`)
+	_, res := engine.NormalizeRequest(req, "openai", "openai-response", "gpt-5.5")
+	if res.Invalid != 1 {
+		t.Fatalf("invalid = %d, want 1", res.Invalid)
+	}
+}
+
+func TestModelSuffixStillMatches(t *testing.T) {
+	store := NewMemory(0)
+	engine := New(enabledConfig(), store)
+	resp := []byte(`{"output":[{"type":"reasoning","encrypted_content":"abc"},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hi"}]}]}`)
+	patched, _ := engine.NormalizeResponse(resp, nil, "openai-response", "openai", "gpt-5.5(high)", false)
+	var parsed struct {
+		Output []struct {
+			Content []struct {
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"output"`
+	}
+	if err := json.Unmarshal(patched, &parsed); err != nil {
+		t.Fatal(err)
+	}
+	refs, _, _ := FindMarkers(parsed.Output[1].Content[0].Text)
+	if len(refs) != 1 {
+		t.Fatalf("no marker")
+	}
+	req := []byte(`{"input":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hi ` + Marker(refs[0]) + `"}]}]}`)
+	_, res := engine.NormalizeRequest(req, "openai", "openai-response", "gpt-5.5")
+	if res.Restored != 1 || res.Foreign != 0 {
+		t.Fatalf("suffixed model should match: %+v", res)
+	}
+}
+
+func TestConversationMismatchIsForeign(t *testing.T) {
+	store := NewMemory(0)
+	engine := New(enabledConfig(), store)
+	provider := []byte(`{"input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"conversation A"}]}]}`)
+	resp := []byte(`{"output":[{"type":"reasoning","encrypted_content":"abc"},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hi"}]}]}`)
+	patched, _ := engine.NormalizeResponse(resp, provider, "openai-response", "openai", "gpt-5.5", false)
+	var parsed struct {
+		Output []struct {
+			Content []struct {
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"output"`
+	}
+	if err := json.Unmarshal(patched, &parsed); err != nil {
+		t.Fatal(err)
+	}
+	refs, _, _ := FindMarkers(parsed.Output[1].Content[0].Text)
+	req := []byte(`{"input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"conversation B"}]},{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hi ` + Marker(refs[0]) + `"}]}]}`)
+	_, res := engine.NormalizeRequest(req, "openai", "openai-response", "gpt-5.5")
+	if res.Foreign != 1 || res.Restored != 0 {
+		t.Fatalf("cross-conversation ref must be foreign: %+v", res)
+	}
+}
+
+func TestSetMaxBytesEvictsImmediately(t *testing.T) {
+	store := NewMemory(1000)
+	store.Put(Entry{Ref: "a", CreatedAt: store.now(), Items: []json.RawMessage{make([]byte, 60)}})
+	store.SetMaxBytes(10)
+	if _, ok := store.Get("a"); ok {
+		t.Fatal("lowering the cap should evict entries that no longer fit")
+	}
+}
+
+func TestRestoreCapsRefsPerRequest(t *testing.T) {
+	store := NewMemory(0)
+	engine := New(enabledConfig(), store)
+	var content strings.Builder
+	content.WriteString("hi")
+	for i := 0; i < maxRefsPerRequest+10; i++ {
+		ref := NewRef()
+		store.Put(Entry{Ref: ref, Owner: Owner, FromFormat: "openai-response", CreatedAt: store.now(), ExpiresAt: store.now().Add(time.Hour), Items: []json.RawMessage{json.RawMessage(`{"type":"reasoning","encrypted_content":"x"}`)}})
+		content.WriteString(" ")
+		content.WriteString(Marker(ref))
+	}
+	body, _ := json.Marshal(map[string]any{
+		"input": []any{map[string]any{
+			"type": "message", "role": "assistant",
+			"content": []any{map[string]any{"type": "output_text", "text": content.String()}},
+		}},
+	})
+	_, res := engine.NormalizeRequest(body, "openai", "openai-response", "gpt-5.5")
+	if res.Restored > maxRefsPerRequest {
+		t.Fatalf("restored %d refs, cap is %d", res.Restored, maxRefsPerRequest)
 	}
 }
