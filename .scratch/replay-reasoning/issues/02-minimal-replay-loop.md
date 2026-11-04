@@ -33,3 +33,15 @@
 测试：`internal/replay` 单测覆盖捕获、还原、幂等、无效引用、tool-call-only、流式跳过、过期；`main_test.go` 经 `handleMethod` 覆盖一次完整往返；`config` 覆盖三条校验。
 
 未做：mock 上游的端到端验证（需要真实 CPA 宿主），以及 03–08 的其余条目。
+
+## Comments
+
+评审后补的修正（同票）：
+
+- 捕获同时接受裸 `output` 与 Codex 执行器传入的 `response.completed` 包装事件（`response.output`）。没有这条，真实链路永远捕获不到。
+- 捕获与还原都要求客户端格式为 `openai`（Chat）。原生 Responses 客户端自己携带推理项，Claude 客户端由宿主已有回放覆盖，两者都不能再插标记，否则会产生重复 reasoning item。
+- 作用域校验从 `owner` 扩到 `owner + FromFormat + Model`，并写入条目。
+- 格式不合法但成对的标记也会被删除，不再因为引用长度不对而原样透传。
+- 内存存储强制 `max_bytes`：按 `CreatedAt` 淘汰最旧条目，单条超过上限则拒收；过期条目在写入时一并清理。
+- 在流式与 Postgres 实现完成前，配置校验直接拒绝 `stream: true` 与 `backend: postgres`，避免静默空转。
+- `postgres.dsn` 改为 `json:"-"`，管理接口不再回显数据库凭据。

@@ -97,13 +97,13 @@ plugins:
       # restores it on the next turn. Off by default.
       replay:
         enabled: false
-        backend: memory        # memory | postgres
+        backend: memory        # postgres is not implemented yet
         allow_memory_fallback: true
         postgres:
           dsn: ""              # empty + fallback on = memory mode
         ttl_hours: 24
         max_bytes: 536870912
-        stream: true
+        stream: false          # streaming capture is not implemented yet
         nonstream: true
 
       # Behaviour prompts appended to the system text. Output tokens shrink;

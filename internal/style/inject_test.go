@@ -214,3 +214,26 @@ func TestUnsupportedFormatUntouched(t *testing.T) {
 		t.Fatalf("body changed")
 	}
 }
+
+func TestResponsesInputPartType(t *testing.T) {
+	body := []byte(`{"input":[{"type":"message","role":"system","content":[{"type":"input_text","text":"Base."}]}]}`)
+	res, err := Apply(body, "responses", "PROMPT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var parsed struct {
+		Input []struct {
+			Content []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"input"`
+	}
+	if err := json.Unmarshal(res.Body, &parsed); err != nil {
+		t.Fatal(err)
+	}
+	parts := parsed.Input[0].Content
+	if len(parts) != 2 || parts[1].Type != "input_text" {
+		t.Fatalf("Responses input part must be input_text: %s", res.Body)
+	}
+}

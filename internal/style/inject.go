@@ -119,7 +119,7 @@ func applyChat(body []byte, text string) (Result, error) {
 	}
 
 	base := fmt.Sprintf("messages.%d", target)
-	next, injected, stripped, err := editMessage(out, base, text)
+	next, injected, stripped, err := editMessage(out, base, text, "text")
 	if err != nil {
 		return res, err
 	}
@@ -131,7 +131,7 @@ func applyChat(body []byte, text string) (Result, error) {
 
 // editMessage rewrites one message-shaped object (role + content). base is the
 // sjson path to that object.
-func editMessage(body []byte, base, text string) ([]byte, bool, bool, error) {
+func editMessage(body []byte, base, text, partType string) ([]byte, bool, bool, error) {
 	out := body
 	contentPath := base + ".content"
 	content := gjson.GetBytes(out, contentPath)
@@ -165,7 +165,7 @@ func editMessage(body []byte, base, text string) ([]byte, bool, bool, error) {
 			out = patched
 		}
 		if text != "" {
-			block, err := marshalNoEscape(map[string]any{"type": "text", "text": Segment(text)})
+			block, err := marshalNoEscape(map[string]any{"type": partType, "text": Segment(text)})
 			if err != nil {
 				return body, false, false, err
 			}
@@ -293,7 +293,7 @@ func applyResponses(body []byte, text string) (Result, error) {
 		return res, nil
 	}
 
-	next, injected, stripped, err := editMessage(out, fmt.Sprintf("input.%d", target), text)
+	next, injected, stripped, err := editMessage(out, fmt.Sprintf("input.%d", target), text, "input_text")
 	if err != nil {
 		return res, err
 	}

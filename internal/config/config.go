@@ -151,7 +151,8 @@ type ReplayConfig struct {
 
 // PostgresConfig points at the plugin's own database.
 type PostgresConfig struct {
-	DSN string `yaml:"dsn" json:"dsn"`
+	// DSN is write-only: it must never be serialized back through the management API.
+	DSN string `yaml:"dsn" json:"-"`
 }
 
 // StyleConfig holds one behaviour-prompt family. Level is the switch: "off"
@@ -265,7 +266,7 @@ func Default() Config {
 			AllowMemoryFallback: true,
 			TTLHours:            24,
 			MaxBytes:            512 << 20,
-			Stream:              true,
+			Stream:              false,
 			Nonstream:           true,
 		},
 	}
@@ -352,11 +353,17 @@ func (c *Config) Normalize() error {
 	if c.Replay.Enabled && !c.Replay.Stream && !c.Replay.Nonstream {
 		return errors.New("replay: stream and nonstream are both off, so replay would never run")
 	}
+	if c.Replay.Enabled && c.Replay.Stream {
+		return errors.New("replay: streaming capture is not implemented yet; set stream: false")
+	}
 	if c.Replay.Backend == "postgres" && strings.TrimSpace(c.Replay.Postgres.DSN) == "" {
 		if !c.Replay.AllowMemoryFallback {
 			return errors.New("replay.postgres.dsn is required when backend is postgres and memory fallback is off")
 		}
 		c.Replay.Backend = "memory"
+	}
+	if c.Replay.Backend == "postgres" {
+		return errors.New("replay: the postgres backend is not implemented yet; use backend: memory")
 	}
 	clampInt(&c.Replay.TTLHours, 1, 24*30)
 	if c.Replay.MaxBytes < 1<<20 {

@@ -83,6 +83,7 @@ func Marker(ref string) string {
 func FindMarkers(s string) (refs []string, cleaned string) {
 	var out strings.Builder
 	rest := s
+	removed := false
 	for {
 		start := strings.Index(rest, MarkerPrefix)
 		if start < 0 {
@@ -94,6 +95,7 @@ func FindMarkers(s string) (refs []string, cleaned string) {
 			break
 		}
 		ref := rest[bodyStart : bodyStart+rel]
+		removed = true
 		if len(ref) == RefLength {
 			refs = append(refs, ref)
 		}
@@ -109,7 +111,7 @@ func FindMarkers(s string) (refs []string, cleaned string) {
 		out.WriteString(prefix)
 		rest = next
 	}
-	if len(refs) == 0 {
+	if !removed {
 		return nil, s
 	}
 	out.WriteString(rest)
@@ -118,9 +120,14 @@ func FindMarkers(s string) (refs []string, cleaned string) {
 
 // NormalizeRequest restores markers in an upstream Responses payload. It is a
 // no-op for any other target format.
-func (e *Engine) NormalizeRequest(body []byte, toFormat string) ([]byte, Result) {
+func (e *Engine) NormalizeRequest(body []byte, clientFormat, toFormat, model string) ([]byte, Result) {
 	res := Result{}
 	if e == nil || e.store == nil || !e.cfg.Enabled || !isResponses(toFormat) {
+		return body, res
+	}
+	if protocol.FormatOf(clientFormat) != "openai" {
+		// Native Responses and Claude clients carry reasoning themselves; the
+		// host already replays for Claude. Only the Chat wire needs us.
 		return body, res
 	}
 	input := gjson.GetBytes(body, "input")
@@ -146,15 +153,17 @@ func (e *Engine) NormalizeRequest(body []byte, toFormat string) ([]byte, Result)
 			continue
 		}
 		var refs []string
+		changedText := false
 		edited, emptied, err := editTextParts(obj, func(s string) (string, bool) {
 			found, cleaned := FindMarkers(s)
-			if len(found) == 0 {
+			if cleaned == s {
 				return s, false
 			}
+			changedText = true
 			refs = append(refs, found...)
 			return cleaned, true
 		})
-		if err != nil || len(refs) == 0 {
+		if err != nil || !changedText {
 			out = append(out, item)
 			continue
 		}
@@ -169,7 +178,7 @@ func (e *Engine) NormalizeRequest(body []byte, toFormat string) ([]byte, Result)
 				res.Invalid++
 				continue
 			}
-			if entry.Owner != Owner {
+			if entry.Owner != Owner || entry.FromFormat != toFormat || (entry.Model != "" && model != "" && entry.Model != model) {
 				res.Foreign++
 				continue
 			}
@@ -202,12 +211,22 @@ func (e *Engine) NormalizeRequest(body []byte, toFormat string) ([]byte, Result)
 // NormalizeResponse stores this turn's reasoning items and leaves a marker in
 // the assistant content. Only non-streaming Responses payloads are handled;
 // streaming arrives one event at a time and is a separate ticket.
-func (e *Engine) NormalizeResponse(body []byte, fromFormat string, stream bool) ([]byte, Result) {
+func (e *Engine) NormalizeResponse(body []byte, fromFormat, clientFormat, model string, stream bool) ([]byte, Result) {
 	res := Result{}
 	if e == nil || e.store == nil || !e.cfg.Enabled || !isResponses(fromFormat) || stream || !e.cfg.Nonstream {
 		return body, res
 	}
+	if protocol.FormatOf(clientFormat) != "openai" {
+		return body, res
+	}
 	output := gjson.GetBytes(body, "output")
+	outputPath := "output"
+	if !output.IsArray() {
+		// The Codex executor hands the terminal response.completed event to the
+		// response normalizer, so the array sits under response.output.
+		output = gjson.GetBytes(body, "response.output")
+		outputPath = "response.output"
+	}
 	if !output.IsArray() {
 		return body, res
 	}
@@ -264,6 +283,7 @@ func (e *Engine) NormalizeResponse(body []byte, fromFormat string, stream bool) 
 		Ref:        ref,
 		Owner:      Owner,
 		FromFormat: fromFormat,
+		Model:      model,
 		Items:      reasoning,
 		CreatedAt:  e.now(),
 		ExpiresAt:  e.now().Add(time.Duration(e.cfg.TTLHours) * time.Hour),
@@ -273,7 +293,7 @@ func (e *Engine) NormalizeResponse(body []byte, fromFormat string, stream bool) 
 	if err != nil {
 		return body, res
 	}
-	patched, err := sjson.SetRawBytes(body, "output", encoded)
+	patched, err := sjson.SetRawBytes(body, outputPath, encoded)
 	if err != nil {
 		return body, res
 	}
@@ -382,7 +402,15 @@ func appendTextPart(obj map[string]json.RawMessage, text string) (json.RawMessag
 		return marshalNoEscape(obj)
 	}
 	trimmed := strings.TrimSpace(string(raw))
-	if strings.HasPrefix(trimmed, `"`) || trimmed == "null" || trimmed == "" {
+	if strings.HasPrefix(trimmed, `"`) {
+		var s string
+		if err := json.Unmarshal(raw, &s); err != nil {
+			return nil, err
+		}
+		obj["content"] = mustRaw(s + text)
+		return marshalNoEscape(obj)
+	}
+	if trimmed == "null" || trimmed == "" {
 		obj["content"] = mustRaw(text)
 		return marshalNoEscape(obj)
 	}

@@ -270,7 +270,7 @@ func (s *pluginState) configure(raw []byte, hostSchema uint32) error {
 		s.guard = guard.New(store)
 		s.routing = routing.New()
 		s.metrics = metrics.New()
-		s.replayStore = replay.NewMemory()
+		s.replayStore = replay.NewMemory(store.Load().Replay.MaxBytes)
 		s.replay = replay.New(store.Load().Replay, s.replayStore)
 		s.closed = false
 		return nil
@@ -288,7 +288,7 @@ func (s *pluginState) configure(raw []byte, hostSchema uint32) error {
 		s.metrics = metrics.New()
 	}
 	if s.replayStore == nil {
-		s.replayStore = replay.NewMemory()
+		s.replayStore = replay.NewMemory(s.cfg.Load().Replay.MaxBytes)
 	}
 	s.replay = replay.New(s.cfg.Load().Replay, s.replayStore)
 	s.closed = false
@@ -357,7 +357,7 @@ func (s *pluginState) normalizeRequest(req pluginapi.RequestTransformRequest) []
 	if engine == nil {
 		return req.Body
 	}
-	body, res := engine.NormalizeRequest(req.Body, req.ToFormat)
+	body, res := engine.NormalizeRequest(req.Body, req.FromFormat, req.ToFormat, req.Model)
 	if s.metrics != nil {
 		s.metrics.RecordReplay(0, res.Restored, res.Invalid, res.Foreign)
 	}
@@ -373,7 +373,7 @@ func (s *pluginState) normalizeResponse(req pluginapi.ResponseTransformRequest) 
 	if engine == nil {
 		return req.Body
 	}
-	body, res := engine.NormalizeResponse(req.Body, req.FromFormat, req.Stream)
+	body, res := engine.NormalizeResponse(req.Body, req.FromFormat, req.ToFormat, req.Model, req.Stream)
 	if s.metrics != nil {
 		s.metrics.RecordReplay(res.Generated, 0, 0, 0)
 	}
