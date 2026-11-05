@@ -91,8 +91,9 @@ CPA persists `config.yaml` and triggers `plugin.reconfigure`. The UI polls
 - The resource page contains no data. The browser asks for the management key
   and keeps it in `sessionStorage`; every API call sends it as a Bearer token.
 - CSP: `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'
-  data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none';
-  form-action 'self'`.
+  data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'none';
+  form-action 'self'`. `'self'` is required because the CPA management panel
+  embeds this page in a same-origin iframe; cross-origin framing stays blocked.
 - No external fonts, analytics, or CDN requests.
 
 ## Performance notes
