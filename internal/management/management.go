@@ -208,7 +208,7 @@ func serveResource(req pluginapi.ManagementRequest, deps Deps) pluginapi.Managem
 	}
 	if path.Ext(clean) == ".html" {
 		headers.Set("Cache-Control", "no-store")
-		headers.Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+		headers.Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'self'")
 	} else {
 		headers.Set("Cache-Control", "public, max-age=31536000, immutable")
 	}
