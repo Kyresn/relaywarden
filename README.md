@@ -191,7 +191,7 @@ curl -H "Authorization: Bearer test-client-key" \
 
 - Management key: `sessionStorage` only, never written to disk or logs.
 - UI preferences: `localStorage` for language and last config change; no secrets.
-- CSP on the embedded page: `default-src 'self'; connect-src 'self'; frame-ancestors 'none'`.
+- CSP on the embedded page: `default-src 'self'; connect-src 'self'; frame-ancestors 'self'`. The panel embeds the page in a same-origin iframe; cross-origin framing is blocked.
 - No external fonts, analytics, or CDN assets.
 - Webhook URLs must be absolute `http(s)`; delivery is asynchronous and best-effort.
 - Plugin optional paths fail open; only registration/config parse errors block loading.

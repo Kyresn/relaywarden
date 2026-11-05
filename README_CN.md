@@ -223,7 +223,7 @@ npm --prefix web run build
 ## 安全
 
 - 管理 key 只存 `sessionStorage`，不写磁盘、不写日志。
-- 资源页面设置 CSP：`default-src 'self'; connect-src 'self'; frame-ancestors 'none'`。
+- 资源页面设置 CSP：`default-src 'self'; connect-src 'self'; frame-ancestors 'self'`。管理面板以同源 iframe 嵌入该页面，跨源嵌入仍被禁止。
 - 不引入外部字体、分析脚本或 CDN。
 - webhook URL 必须是绝对 `http(s)`；发送异步、有界队列、失败不影响请求。
 - 插件所有可选路径 fail-open；只有注册/配置解析失败会阻止加载。
