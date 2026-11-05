@@ -2,6 +2,7 @@ package management
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -66,6 +67,15 @@ func TestResourceServingAndCSP(t *testing.T) {
 	}
 	if resp.Headers.Get("Content-Security-Policy") == "" {
 		t.Fatal("missing CSP")
+	}
+	// The management panel embeds this document in an iframe from the same
+	// origin, so the CSP must not forbid that framing.
+	csp := resp.Headers.Get("Content-Security-Policy")
+	if !strings.Contains(csp, "frame-ancestors 'self'") {
+		t.Fatalf("CSP does not allow the management panel iframe: %q", csp)
+	}
+	if strings.Contains(csp, "frame-ancestors 'none'") {
+		t.Fatalf("CSP forbids the management panel iframe: %q", csp)
 	}
 	resp = Handle(pluginapi.ManagementRequest{Method: "GET", Path: "/v0/resource/plugins/relaywarden/ui/assets/app.js"}, d)
 	if resp.StatusCode != 200 || resp.Headers.Get("Cache-Control") == "" {
