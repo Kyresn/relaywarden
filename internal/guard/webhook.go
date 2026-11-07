@@ -105,5 +105,6 @@ func (q *webhookQueue) send(s Signal) {
 	}
 }
 
-// Version is the plugin version reported in metadata and webhooks.
-const Version = "0.1.2"
+// Version is the plugin version reported in metadata and webhooks. Release
+// builds override it from the v* tag through -ldflags -X.
+var Version = "0.1.3"

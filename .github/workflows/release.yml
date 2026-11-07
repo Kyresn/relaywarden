@@ -93,7 +93,8 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           CGO_ENABLED=1 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
-            go build -trimpath -buildmode=c-shared -o "dist/${LIB_NAME}" .
+            go build -trimpath -ldflags "-X github.com/Kyresn/relaywarden/internal/guard.Version=${VERSION}" \
+            -buildmode=c-shared -o "dist/${LIB_NAME}" .
           # c-shared also emits a C header; it is not a release artifact.
           rm -f "dist/${PLUGIN_ID}.h"
       # The store installs from a per-platform zip holding the dynamic library

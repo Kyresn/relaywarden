@@ -49,6 +49,13 @@ func call(t *testing.T, method string, req any, out any) {
 	}
 }
 
+func TestRegistrationReportsCurrentReleaseVersion(t *testing.T) {
+	got := registrationFor(10).Metadata.Version
+	if got != "0.1.3" {
+		t.Fatalf("plugin version = %q, want 0.1.3", got)
+	}
+}
+
 func TestRegisterAndCompress(t *testing.T) {
 	register(t, `
 enabled: true
